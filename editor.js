@@ -1,4 +1,4 @@
-/* Small, dependency-free SVG molecular sketcher. Connectivity is visual, not graded. */
+/* Small, dependency-free SVG molecular sketcher. Connectivity is graded against the molecular graphs in data.js. */
 class MoleculeEditor {
   constructor(host) {
     this.host = host;
@@ -13,11 +13,11 @@ class MoleculeEditor {
   reset(record = true) {
     if (record) this.snapshot();
     this.atoms = [
-      { x: 230, y: 270, e: "NH2" },
-      { x: 310, y: 225, e: "C" },
-      { x: 390, y: 270, e: "C" },
-      { x: 390, y: 350, e: "O" },
-      { x: 470, y: 225, e: "OH" },
+      { x: 230, y: 480, e: "NH2" },
+      { x: 310, y: 440, e: "C" },
+      { x: 390, y: 480, e: "C" },
+      { x: 390, y: 550, e: "O" },
+      { x: 470, y: 440, e: "OH" },
     ];
     this.bonds = [
       { a: 0, b: 1, t: "single" },
@@ -73,7 +73,7 @@ class MoleculeEditor {
       )
       .join(
         "",
-      )}<select aria-label="Atom label">${["C", "N", "NH", "NH2", "O", "OH", "S", "SH", "H", "N+", "O−"].map((e) => `<option>${e}</option>`).join("")}</select><button type="button" data-action="undo">Undo</button><button type="button" data-action="redo">Redo</button><button type="button" data-action="reset">Backbone</button></div><svg class="drawing" viewBox="0 0 700 420" role="img" aria-label="Molecule drawing canvas. Use pointer to draw; paper mode is available below."></svg></div><p class="editor-help">Drag from an atom to draw a bond; release on another atom to connect. Click a bond to change its type (click a wedge/dash again to reverse it). Atom tool: choose a label, then click an atom. Ring tool: click an atom to attach a ring, or empty space for a new ring. Move atoms to arrange your drawing. Carbon and its H are implicit.</p>`;
+      )}<select aria-label="Atom label">${["C", "N", "NH", "NH2", "NH3+", "NH2+", "NH+", "O", "OH", "S", "SH", "H", "N+", "O−"].map((e) => `<option>${e}</option>`).join("")}</select><button type="button" data-action="undo">Undo</button><button type="button" data-action="redo">Redo</button><button type="button" data-action="reset">Backbone</button></div><svg class="drawing" viewBox="0 0 700 580" role="img" aria-label="Molecule drawing canvas. Use pointer to draw; paper mode is available below."></svg></div><p class="editor-help">Drag from an atom to draw a bond; release on another atom to connect. Click a bond to change its type (click a wedge/dash again to reverse it). Atom tool: choose a label, then click an atom. Ring tool: click an atom to attach a ring, or empty space for a new ring. Move atoms to arrange your drawing. Carbon and its H are implicit.</p>`;
     this.svg = this.host.querySelector("svg");
     this.host.querySelectorAll("[data-tool]").forEach(
       (b) =>
@@ -210,7 +210,7 @@ class MoleculeEditor {
     let p = this.pos(e);
     if (this.drag.moving) {
       this.atoms[this.drag.i].x = Math.max(20, Math.min(680, p.x));
-      this.atoms[this.drag.i].y = Math.max(20, Math.min(400, p.y));
+      this.atoms[this.drag.i].y = Math.max(20, Math.min(560, p.y));
     } else this.drag.end = p;
     this.draw();
   }
@@ -253,7 +253,7 @@ class MoleculeEditor {
       b = this.atoms.length;
       this.atoms.push({
         x: Math.max(15, Math.min(685, origin.x + len * Math.cos(angle))),
-        y: Math.max(15, Math.min(405, origin.y + len * Math.sin(angle))),
+        y: Math.max(15, Math.min(565, origin.y + len * Math.sin(angle))),
         e: "C",
       });
     }
