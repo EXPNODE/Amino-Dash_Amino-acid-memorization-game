@@ -26,19 +26,6 @@ python -m http.server 8000
 
 Visit http://localhost:8000. Python is only an optional local server; the published game uses plain HTML, CSS, and JavaScript. All fonts, scripts, and structure images are local; no CDN requests are needed.
 
-## What stayed from the original
-
-- All 20 amino acids, their full names, three-letter codes, one-letter codes, and side chains.
-- Four modes: mixed training, names & codes, bidirectional structure matching, and draw/reveal/self-check.
-- Twelve-question rounds; mixed rounds always have six name/code questions and six structure questions.
-- All six name/code directions and all six structure/name/code directions.
-- Adaptive weighted practice, priority for older cards, and missed-card retries after intervening questions. A retry waits until its question type is eligible.
-- Familiar directions unlock typed answers at familiarity level 2.
-- Case-insensitive typed answers; aspartate and glutamate aliases accepted.
-- Combo points, optional speed bonus, gold at 12/12 and silver at 10/12 or above.
-- Enlarged structure references, answer feedback, and keyboard shortcuts.
-- Original neutral-form chemistry, backbone orientation, and stereochemistry conventions. SVG reference images were generated from the original molecule definitions with RDKit. L-threonine is 2S,3R; L-isoleucine is 2S,3S. Other alpha stereocenters remain unspecified, as in the original.
-
 ## New reasons to play another round
 
 - Persistent XP, levels (one per 2,000 XP), personal bests for each mode, medals, and best combo.
