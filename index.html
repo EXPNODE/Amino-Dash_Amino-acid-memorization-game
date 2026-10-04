@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#102421" />
+    <title>Amino Dash</title>
+    <link rel="stylesheet" href="style.css" />
+    <script defer src="data.js"></script>
+    <script defer src="editor.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <header>
+      <a href="#" id="brand">A<span>↗</span> AMINO DASH</a>
+      <nav>
+        <button id="home">Play</button><button id="atlas">Field guide</button
+        ><button id="backup">Save / restore</button>
+      </nav>
+    </header>
+    <div id="storage-warning" role="status"></div>
+    <main id="app"></main>
+    <footer>
+      20 amino acids. A little practice, a lot of recall.<br />Private browser
+      progress · No account required
+    </footer>
+    <dialog id="modal">
+      <button id="close-modal" class="close" aria-label="Close dialog">
+        ×
+      </button>
+      <div id="modal-body"></div>
+    </dialog>
+  </body>
+</html>
