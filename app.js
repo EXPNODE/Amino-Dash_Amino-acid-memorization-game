@@ -1,638 +1,273 @@
-"use strict";
-const $ = (s) => document.querySelector(s),
-  app = $("#app"),
-  modal = $("#modal");
-const PAIRS = Array.from({ length: 3 }, (_, a) =>
-  Array.from({ length: 3 }, (_, b) => [a, b]),
-)
-  .flat()
-  .filter(([a, b]) => a !== b);
-const STRUCTURES = [
-    [0, 3],
-    [1, 3],
-    [2, 3],
-    [3, 0],
-    [3, 1],
-    [3, 2],
-  ],
-  LABELS = [
-    "full name",
-    "3-letter code",
-    "1-letter code",
-    "skeletal structure",
-  ];
-const MODES = {
-  mixed: "Mixed",
-  codes: "Names & Codes",
-  structures: "Structures",
-  draw: "Drawing",
-};
-const SAVE_KEY =
-  "amino-dash:v1:" + location.pathname.replace(/index\.html$/, "");
-const clone = (x) => JSON.parse(JSON.stringify(x)),
-  shuffle = (a) => {
-    const out = a.slice();
-    for (let i = out.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [out[i], out[j]] = [out[j], out[i]];
-    }
-    return out;
-  },
-  key = (c) => c.join(":"),
-  day = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-function fresh() {
-  return {
-    version: 1,
-    memory: {},
-    retry: [],
-    turn: 0,
-    totalXP: 0,
-    answers: 0,
-    fullCorrect: 0,
-    rounds: 0,
-    medals: 0,
-    bestStreak: 0,
-    bests: {},
-    days: {},
-    history: [],
-    settings: { speed: true },
-  };
-}
-function validKey(k) {
-  return (
-    /^(?:[0-9]|1[0-9]):[0-3]:[0-4]$/.test(k) &&
-    (([i, a, b]) =>
-      PAIRS.concat(STRUCTURES, [[0, 4]]).some((p) => p[0] === a && p[1] === b))(
-      k.split(":").map(Number),
-    )
-  );
-}
-function validate(v) {
-  if (!v || v.version !== 1) throw Error("This save format is not supported.");
-  const n = fresh(),
-    num = (x, max = 1e12) =>
-      typeof x === "number" && Number.isFinite(x) && x >= 0 && x <= max;
-  if (
-    !v.memory ||
-    typeof v.memory !== "object" ||
-    Array.isArray(v.memory) ||
-    Object.keys(v.memory).length > 260
-  )
-    throw Error("Invalid card progress.");
-  for (const [k, a] of Object.entries(v.memory)) {
-    if (
-      !validKey(k) ||
-      !Array.isArray(a) ||
-      a.length !== 2 ||
-      !num(a[0], 8) ||
-      !num(a[1], 1e12)
-    )
-      throw Error("Invalid card progress.");
-    n.memory[k] = a.slice();
-  }
-  for (const k of [
-    "turn",
-    "totalXP",
-    "answers",
-    "fullCorrect",
-    "rounds",
-    "medals",
-    "bestStreak",
-  ]) {
-    if (!Number.isSafeInteger(v[k]) || !num(v[k]))
-      throw Error("Invalid score data.");
-    n[k] = v[k];
-  }
-  if (!Array.isArray(v.retry) || v.retry.length > 260)
-    throw Error("Invalid retry queue.");
-  n.retry = v.retry.map((r) => {
-    if (!r || !validKey(r.key) || !Number.isSafeInteger(r.due) || !num(r.due))
-      throw Error("Invalid retry card.");
-    return { key: r.key, due: r.due };
-  });
-  if (!v.bests || typeof v.bests !== "object")
-    throw Error("Invalid personal bests.");
-  for (const [k, x] of Object.entries(v.bests)) {
-    if (!Object.hasOwn(MODES, k) || !Number.isSafeInteger(x) || !num(x))
-      throw Error("Invalid personal best.");
-    n.bests[k] = x;
-  }
-  if (
-    !v.days ||
-    typeof v.days !== "object" ||
-    Object.keys(v.days).length > 20000
-  )
-    throw Error("Invalid practice dates.");
-  for (const [d, x] of Object.entries(v.days)) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isSafeInteger(x) || !num(x))
-      throw Error("Invalid practice day.");
-    n.days[d] = x;
-  }
-  if (!Array.isArray(v.history) || v.history.length > 50)
-    throw Error("Invalid round history.");
-  n.history = v.history.map((h) => {
-    if (
-      !h ||
-      !Object.hasOwn(MODES, h.mode) ||
-      !num(h.score) ||
-      !num(h.correct, 12) ||
-      !num(h.seconds, 1e9) ||
-      typeof h.date !== "string" ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(h.date)
-    )
-      throw Error("Invalid round history.");
-    return {
-      mode: h.mode,
-      score: h.score,
-      correct: h.correct,
-      seconds: h.seconds,
-      date: h.date,
-    };
-  });
-  n.settings = { speed: v.settings?.speed !== false };
+'use strict';
+const $ = s => document.querySelector(s), app = $('#app'), modal = $('#modal');
+const PAIRS = Array.from({length:3},(_,a)=>Array.from({length:3},(_,b)=>[a,b])).flat().filter(([a,b])=>a!==b);
+const STRUCTURES = [[0,3],[1,3],[2,3],[3,0],[3,1],[3,2]];
+const TYPES = [...PAIRS,...STRUCTURES,[0,4],...[0,1,2,3].map(a=>[a,5]),[0,6],...[0,1,2].map(a=>[a,7])];
+const LABELS = ['Name','3-letter code','1-letter code','Structure'];
+const MODES = {mixed:'Mixed',codes:'Names & codes',structures:'Structures',draw:'Drawing',combined:'Combined · Hard',protonation:'Deprotonation',hh:'Henderson–Hasselbalch'};
+const THEMES = ['dark','grey','light','slate'];
+const SAVE_KEY = 'amino-dash:v2:' + location.pathname.replace(/index\.html$/,''), INTRO_KEY = SAVE_KEY+':intro';
+const clone=x=>JSON.parse(JSON.stringify(x));
+const shuffle=a=> {const out=a.slice();for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]];}return out;};
+const key=c=>c.join(':');
+const day=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+const dateNumber=d=>Math.round(Date.parse(d+'T00:00:00Z')/86400000);
+const dateString=n=>new Date(n*86400000).toISOString().slice(0,10);
+const normalize=s=>s.trim().toLowerCase().replace(/\s+/g,' ').replace(/^aspartate$/,'aspartic acid').replace(/^glutamate$/,'glutamic acid');
+const cardID=c=>c[0]*TYPES.length+TYPES.findIndex(([a,b])=>a===c[1]&&b===c[2]);
+const fromID=n=>[Math.floor(n/TYPES.length),...TYPES[n%TYPES.length]];
+function fresh(){return {version:2,memory:{},retry:[],turn:0,totalXP:0,answers:0,fullCorrect:0,rounds:0,medals:0,bestStreak:0,bests:{},days:{},history:[],settings:{speed:true,sound:true,theme:'dark'}};}
+function validKey(k){if(!/^\d{1,2}:\d:\d$/.test(k))return false;const [i,a,b]=k.split(':').map(Number);return i<20&&TYPES.some(p=>p[0]===a&&p[1]===b)&&(b!==7||a!==2||PKA[i][2]!==null);}
+function validate(v){
+  if(!v||v.version!==2)throw Error('Only new AD2 / AH2 saves are supported.');
+  const n=fresh(),num=(x,max=1e12)=>Number.isFinite(x)&&x>=0&&x<=max,int=(x,max=1e12)=>Number.isSafeInteger(x)&&num(x,max);
+  if(!v.memory||Array.isArray(v.memory)||Object.keys(v.memory).length>420)throw Error('Invalid mastery data.');
+  for(const [k,a]of Object.entries(v.memory)){if(!validKey(k)||!Array.isArray(a)||a.length!==2||!num(a[0],8)||!int(a[1]))throw Error('Invalid card.');n.memory[k]=a.slice();}
+  for(const k of ['turn','totalXP','answers','fullCorrect','rounds','medals','bestStreak']){if(!int(v[k]))throw Error('Invalid score.');n[k]=v[k];}
+  if(n.fullCorrect>n.answers||n.medals>n.rounds)throw Error('Inconsistent scores.');
+  if(!Array.isArray(v.retry)||v.retry.length>420)throw Error('Invalid retries.');
+  const retries=new Set();n.retry=v.retry.map(r=>{if(!r||!validKey(r.key)||!int(r.due)||retries.has(r.key))throw Error('Invalid retry.');retries.add(r.key);return {key:r.key,due:r.due};});
+  if(!v.bests||typeof v.bests!=='object'||Array.isArray(v.bests))throw Error('Invalid best scores.');
+  for(const [k,x]of Object.entries(v.bests)){if(!Object.hasOwn(MODES,k)||!int(x))throw Error('Invalid best score.');n.bests[k]=x;}
+  if(!v.days||Array.isArray(v.days)||Object.keys(v.days).length>366)throw Error('Invalid dates.');
+  for(const [d,x]of Object.entries(v.days)){if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!Number.isFinite(dateNumber(d))||dateString(dateNumber(d))!==d||!int(x))throw Error('Invalid date.');n.days[d]=x;}
+  if(!Array.isArray(v.history)||v.history.length>60)throw Error('Invalid history.');
+  n.history=v.history.map(h=>{if(!h||!Object.hasOwn(MODES,h.mode)||!int(h.score)||!num(h.correct,12)||!int(h.seconds,1e9)||!/^\d{4}-\d{2}-\d{2}$/.test(h.date)||!Number.isFinite(dateNumber(h.date)))throw Error('Invalid round.');return {...h};});
+  n.settings={speed:v.settings?.speed!==false,sound:v.settings?.sound!==false,theme:THEMES.includes(v.settings?.theme)?v.settings.theme:'dark'};
   return n;
 }
-let save = fresh(),
-  blocked = false,
-  storageOK = true,
-  round = null,
-  state = "home",
-  editor = null,
-  ready = 0;
-try {
-  const raw = localStorage.getItem(SAVE_KEY);
-  if (raw) save = validate(JSON.parse(raw));
-} catch (e) {
-  blocked = true;
-  storageOK = false;
-  $("#storage-warning").textContent =
-    "Local save data could not be read. Use Save / restore to import or inspect backups.";
+let save=fresh(),blocked=false,round=null,state='home',editor=null,ready=0,audioContext;
+try{const raw=localStorage.getItem(SAVE_KEY);if(raw)save=validate(JSON.parse(raw));}catch{blocked=true;$('#storage-warning').textContent='Local progress could not be read. Restore a backup to continue saving.';}
+function persist(){if(blocked)return false;try{localStorage.setItem(SAVE_KEY,JSON.stringify(save));$('#storage-warning').textContent='';return true;}catch{$('#storage-warning').textContent='Browser storage unavailable. Copy or download a save before closing.';return false;}}
+function applyTheme(){document.documentElement.dataset.theme=save.settings.theme;$('#theme').value=save.settings.theme;document.querySelector('meta[name="theme-color"]').content=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();}
+function showModal(html){$('#modal-body').innerHTML=html;if(!modal.open)modal.showModal();}
+function img(i,cls='structure',alt='Amino acid skeletal structure'){return `<img class="${cls}" src="assets/${i}.svg" alt="${alt}" data-zoom="${i}">`;}
+function zoom(i){showModal(`<h2>${AA[i][0]}</h2>${img(i)}<p>Neutral form · Carbon-bound hydrogen implicit</p>`);}
+function bindZoom(){app.querySelectorAll('[data-zoom]').forEach(el=>{el.oncontextmenu=e=>{e.preventDefault();zoom(+el.dataset.zoom);};if(!el.closest('.choice')){el.tabIndex=0;el.onclick=()=>zoom(+el.dataset.zoom);el.onkeydown=e=>{if(e.key==='Enter'){e.stopPropagation();zoom(+el.dataset.zoom);}};}});}
+// Missing attached SVGs have a local graph fallback; existing /assets/ files take priority.
+document.addEventListener('error',e=>{const el=e.target;if(el.tagName!=='IMG'||!el.hasAttribute('data-zoom')||el.dataset.fallback)return;el.dataset.fallback='1';el.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(graphSVG(molecule(+el.dataset.zoom)));},true);
+function graphSVG(g,width=700){
+  let out='';
+  const line=(x,y,X,Y)=>`<line x1="${x}" y1="${y}" x2="${X}" y2="${Y}" stroke="#192e26" stroke-width="2.5" stroke-linecap="round"/>`;
+  for(const b of g.bonds){const a=g.atoms[b.a],c=g.atoms[b.b],len=Math.hypot(c.x-a.x,c.y-a.y)||1,nx=-(c.y-a.y)/len,ny=(c.x-a.x)/len;for(const o of b.t==='double'?[-3,3]:b.t==='triple'?[-5,0,5]:[0])out+=line(a.x+nx*o,a.y+ny*o,c.x+nx*o,c.y+ny*o);}
+  g.atoms.forEach((a,j)=>{if(a.e!=='C')out+=`<text x="${a.x}" y="${a.y+7}" text-anchor="middle" font-family="system-ui" font-size="21" fill="#192e26" paint-order="stroke" stroke="white" stroke-width="7" stroke-linejoin="round">${a.e}</text>`;});
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="120 60 ${width-120} 520" role="img" aria-label="Molecular skeleton">${out}</svg>`;
 }
-function persist() {
-  if (blocked) return false;
-  try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
-    storageOK = true;
-    $("#storage-warning").textContent = "";
-    return true;
-  } catch {
-    storageOK = false;
-    $("#storage-warning").textContent =
-      "Browser storage is unavailable or full. Export a backup before closing.";
-    return false;
+function trained(){return Object.entries(save.memory).filter(([k,v])=>{const [,a,b]=k.split(':').map(Number);return a<3&&b<3&&v[0]>=2;}).length;}
+function streakDays(){let d=new Date(),n=0;if(!save.days[day()])d.setDate(d.getDate()-1);for(let i=0;i<366;i++){const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;if(!save.days[k])break;n++;d.setDate(d.getDate()-1);}return n;}
+function trends(mode){
+  const modes=mode?[mode]:Object.keys(MODES),blocks=[];
+  for(const m of modes){const h=save.history.filter(h=>h.mode===m).slice(0,12).reverse();if(!h.length)continue;
+    const bests=[];let best=0;h.forEach(x=>bests.push(best=Math.max(best,x.score)));
+    const points=bests.map((x,i)=>`${12+i*276/Math.max(1,h.length-1)},${65-x/Math.max(1,...bests)*50}`).join(' ');
+    const recent=h.slice(-3),earlier=h.slice(-6,-3),avg=a=>a.reduce((s,x)=>s+x.correct/12*100,0)/a.length;
+    const change=earlier.length===3?avg(recent)-avg(earlier):null,first=h[0].score,gain=first?Math.round((best-first)/first*100):null;
+    blocks.push(`<article class="trend"><div class="row"><strong>${MODES[m]}</strong><span class="gold">${save.bests[m]||best} best</span></div><svg class="spark" viewBox="0 0 300 80" role="img" aria-label="Best score across ${h.length} recent rounds"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="${12+(h.length-1)*276/Math.max(1,h.length-1)}" cy="${65-bests.at(-1)/Math.max(1,...bests)*50}" r="4" fill="currentColor"/></svg><small>${h.length} recent rounds${gain!==null?' · Best '+(gain>=0?'+':'')+gain+'%':''}</small><p>${change!==null?(change>=0?'+':'')+change.toFixed(1)+' percentage points accuracy vs previous 3 rounds':(avg(recent)).toFixed(1)+'% recent accuracy'} · ${Math.round(recent.reduce((s,x)=>s+x.seconds,0)/recent.length)}s / round</p></article>`);
   }
+  return blocks.length?`<div class="trends">${blocks.join('')}</div>`:'<p>Complete a round to start tracking your scores and accuracy.</p>';
 }
-function img(i, cls = "structure", alt = "Amino acid skeletal structure") {
-  return `<img class="${cls}" src="assets/${i}.svg" alt="${alt}" data-zoom="${i}">`;
+function home(){state='home';round=null;editor=null;const today=save.days[day()]||0;
+  app.innerHTML=`<section class="hero"><div><span class="eyebrow">Practice</span><h1>Amino Acids</h1><div class="stats"><div class="stat"><strong>${save.totalXP.toLocaleString()}</strong><small>XP</small></div><div class="stat"><strong>${streakDays()}</strong><small>Day streak</small></div><div class="stat"><strong>${save.medals}</strong><small>Medals</small></div></div></div><aside class="panel"><div class="row"><span class="eyebrow">Daily target</span><span class="tag">${today>=24?'COMPLETE':'24 ANSWERS'}</span></div><h2>${Math.min(today,24)} <span class="muted">/ 24</span></h2><div class="progress"><div style="width:${Math.min(100,today/24*100)}%"></div></div><div class="row"><small>Mastered name/code prompts</small><strong>${trained()} / 120</strong></div></aside></section><div class="row"><h2>Select mode</h2><span class="tag">12 QUESTIONS / ROUND</span></div><section class="modes">${[
+  ['mixed','↔','6 names/codes + 6 structure questions'],['codes','Aa','Names and codes in every direction'],['structures','⌬','Identify structures and draw from names or codes'],['draw','✎','Draw from memory · Autograde with override'],['combined','4','One given, three answers: structure, name and codes'],['protonation','H⁺','Click protonation sites on amino acids and peptides'],['hh','pH','Solve pH, acid/base ratios and protonated fractions']
+  ].map(([m,icon,txt])=>`<button class="mode" data-start="${m}"><span class="icon">${icon}</span><strong>${MODES[m]}</strong><small>${txt}</small><small>Best: ${save.bests[m]||0} pts</small></button>`).join('')}</section><div class="row settings"><small>Missed cards return after three questions. Mastered name/code prompts use typed answers.</small><label class="switch"><input id="speed" type="checkbox" ${save.settings.speed?'checked':''}> Speed bonus</label><label class="switch"><input id="sound" type="checkbox" ${save.settings.sound?'checked':''}> Gold sound</label></div><section class="panel improvement"><div class="row"><h2>Improvement</h2><small>${save.answers} answers · ${save.rounds} rounds · Best streak ${save.bestStreak}</small></div>${trends()}<details><summary>Round history</summary>${save.history.length?`<table class="history"><thead><tr><th>Date / mode</th><th>Accuracy</th><th>Score</th><th>Time</th></tr></thead><tbody>${save.history.slice(0,12).map(h=>`<tr><td>${h.date}<br><small>${MODES[h.mode]}</small></td><td>${Math.round(h.correct/12*100)}%</td><td>${h.score}</td><td>${h.seconds}s</td></tr>`).join('')}</tbody></table>`:'<p>No rounds completed.</p>'}</details></section>`;
+  app.querySelectorAll('[data-start]').forEach(b=>b.onclick=()=>start(b.dataset.start));
+  for(const k of ['speed','sound'])$('#'+k).onchange=e=>{save.settings[k]=e.target.checked;persist();};
 }
-function zoom(i) {
-  $("#modal-body").innerHTML =
-    `<h2>Structure</h2>${img(i)}<p>Neutral form · Carbon-bound hydrogen implicit</p>`;
-  modal.showModal();
+function unlockSound(){if(!save.settings.sound||matchMedia('(prefers-reduced-motion: reduce)').matches)return;try{audioContext ||= new (window.AudioContext||window.webkitAudioContext)();audioContext.resume().catch(()=>{});}catch{}}
+function thonk(delay=0){if(!save.settings.sound||!audioContext||audioContext.state!=='running')return;try{const t=audioContext.currentTime+delay,o=audioContext.createOscillator(),g=audioContext.createGain();o.type='sine';o.frequency.setValueAtTime(160,t);o.frequency.exponentialRampToValueAtTime(55,t+.09);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.09,t+.007);g.gain.exponentialRampToValueAtTime(.0001,t+.15);o.connect(g);g.connect(audioContext.destination);o.start(t);o.stop(t+.16);}catch{}}
+function celebrate(kind='retry'){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const host=$('#effects'),box=document.createElement('div');box.className='confetti';
+  for(let i=0;i<(kind==='gold'?14:8);i++){const bit=document.createElement('i');bit.style.setProperty('--x',`${(Math.random()-.5)*230}px`);bit.style.setProperty('--y',`${-40-Math.random()*80}px`);bit.style.setProperty('--r',`${Math.random()*300}deg`);bit.style.background=i%2?'var(--gold)':'var(--green)';box.append(bit);}
+  host.append(box);setTimeout(()=>box.remove(),1000);
 }
-function bindZoom() {
-  app.querySelectorAll("[data-zoom]").forEach((el) => {
-    el.oncontextmenu = (e) => {
-      e.preventDefault();
-      zoom(+el.dataset.zoom);
-    };
-    if (!el.closest(".choice")) {
-      el.tabIndex = 0;
-      el.onclick = () => zoom(+el.dataset.zoom);
-      el.onkeydown = (e) => {
-        if (e.key === "Enter") {
-          e.stopPropagation();
-          zoom(+el.dataset.zoom);
-        }
-      };
-    }
-  });
+function start(mode){unlockSound();round={mode,done:0,correct:0,score:0,streak:0,started:Date.now(),recent:[],mix:[]};for(let n=0;n<3;n++)round.mix.push(...shuffle(['codes','codes','to','from']));next();}
+function choose(){
+  let pairs=round.mode==='draw'?[[0,4]]:round.mode==='structures'?STRUCTURES:round.mode==='combined'?[0,1,2,3].map(a=>[a,5]):round.mode==='protonation'?[[0,6]]:round.mode==='hh'?[0,1,2].map(a=>[a,7]):PAIRS;
+  if(round.mode==='mixed'){const m=round.mix[round.done];pairs=m==='codes'?PAIRS:STRUCTURES.filter(p=>(p[1]===3)===(m==='to'));}
+  const cards=AA.flatMap((_,i)=>pairs.filter(([a,b])=>b!==7||a!==2||PKA[i][2]!==null).map(([a,b])=>[i,a,b])),keys=new Set(cards.map(key));
+  const retry=save.retry.filter(r=>r.due<=save.turn&&keys.has(r.key)).sort((a,b)=>a.due-b.due)[0];if(retry)return retry.key.split(':').map(Number);
+  const pending=new Set(save.retry.map(r=>r.key));let pool=cards.filter(c=>!pending.has(key(c))&&!round.recent.includes(c[0]));if(!pool.length)pool=cards.filter(c=>!round.recent.includes(c[0]));if(!pool.length)pool=cards;
+  const weights=pool.map(c=>{const [level,seen]=save.memory[key(c)]||[0,0];return (1+(seen?Math.min(4,Math.max(0,(Date.now()/1000-seen)/86400)):0))/(1+level);});
+  let r=Math.random()*weights.reduce((a,b)=>a+b,0);return pool.find((c,i)=>(r-=weights[i])<0)||pool.at(-1);
 }
-function trained() {
-  return Object.entries(save.memory).filter(
-    ([k, v]) => +k.split(":")[1] < 3 && +k.split(":")[2] < 3 && v[0] >= 2,
-  ).length;
-}
-function streakDays() {
-  let d = new Date(),
-    n = 0;
-  if (!save.days[day()]) d.setDate(d.getDate() - 1);
-  for (let i = 0; i < 20000; i++) {
-    let k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    if (!save.days[k]) break;
-    n++;
-    d.setDate(d.getDate() - 1);
+function questionShell(body,extra=''){app.innerHTML=`<section class="question ${extra}"><div class="row"><span class="eyebrow">${MODES[round.mode]}</span><span>${round.done+1} / 12 · ${round.score} pts · <span class="gold">${round.streak} streak</span></span></div><div class="progress"><div style="width:${round.done/12*100}%"></div></div>${body}</section>`;}
+function next(){
+  if(round.done===12){finish();return;}save.turn++;round.card=choose();round.wasMissed=save.retry.some(r=>r.key===key(round.card));round.recent=[...round.recent,round.card[0]].slice(-3);round.feedbackHTML='';round.asked=performance.now();editor=null;
+  if(round.mode==='combined'){combinedQuestion();return;}if(round.mode==='protonation'){protonQuestion();return;}if(round.mode==='hh'){hhQuestion();return;}
+  const [i,a,b]=round.card,level=save.memory[key(round.card)]?.[0]||0;
+  state=round.mode==='draw'||round.mode==='structures'&&b===3?'draw':level>=2&&b<3?'type':'choice';round.answer=b<3?AA[i][b]:i;
+  questionShell(`<div class="prompt"><span class="tag">${state==='draw'?'DRAW STRUCTURE':state==='type'?'TYPE '+LABELS[b].toUpperCase():'SELECT '+LABELS[b].toUpperCase()}</span>${a===3?img(i):`<h1>${AA[i][a]}</h1>`}</div><div id="answer-area"></div>`);
+  const area=$('#answer-area');
+  if(state==='draw'){
+    area.innerHTML=`<div id="editor"></div><label class="switch"><input type="checkbox" id="paper"> Drawing on paper</label><small>Autograder checks connectivity, labels and bond orders. Stereochemistry needs your review.</small><div class="actions"><button class="primary" id="reveal">Check structure</button></div>`;
+    editor=new MoleculeEditor($('#editor'));$('#paper').onchange=e=>$('#editor').hidden=e.target.checked;$('#reveal').onclick=reveal;
+  }else if(state==='type'){
+    area.innerHTML=`<form id="answer-form"><label for="typed">${LABELS[b]}</label><input id="typed" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="actions"><button class="primary">Submit</button><button type="button" id="teach">Show answer</button></div></form>`;
+    $('#answer-form').onsubmit=e=>{e.preventDefault();submit();};$('#teach').onclick=()=>grade(0);$('#typed').focus();
+  }else{
+    round.options=shuffle([...shuffle(AA.map((v,j)=>b===3?j:v[b]).filter(v=>v!==round.answer)).slice(0,3),round.answer]);
+    area.innerHTML=`<div class="choices">${round.options.map((v,n)=>`<button class="choice" data-pick="${n}"><b>${n+1}</b>${b===3?img(v,'structure',`Option ${n+1}`):v}</button>`).join('')}</div><small>1–4 or click${b===3?' · Right-click to zoom':''}</small>`;
+    app.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>pick(+b.dataset.pick));
   }
-  return n;
+  bindZoom();window.scrollTo(0,0);
 }
-function home() {
-  state = "home";
-  round = null;
-  let today = save.days[day()] || 0;
-  app.innerHTML = `<section class="hero"><div><span class="eyebrow">Practice</span><h1>Amino Acids</h1><p>Review structures, 3-letter codes, 1-letter codes, and names for all 20 standard amino acids.</p><div class="stats"><div class="stat"><strong>${save.totalXP.toLocaleString()}</strong><small>Total XP</small></div><div class="stat"><strong>${streakDays()}</strong><small>Day streak</small></div><div class="stat"><strong>${save.medals}</strong><small>Medals</small></div></div></div><aside class="panel"><div class="row"><span class="eyebrow">Daily Target</span><span class="tag">${today >= 24 ? "COMPLETE" : "24 ANSWERS"}</span></div><h2>${Math.min(today, 24)} <span class="muted">/ 24</span></h2><div class="progress"><div style="width:${Math.min(100, (today / 24) * 100)}%"></div></div><p>${today >= 24 ? "Target reached for today." : "Answer 24 cards to hit the daily target."}</p><hr style="border:0;border-top:1px solid var(--line)"><small>Mastered prompts</small><div class="row"><strong>${trained()} / 120 directions</strong><span class="gold">Level ${1 + Math.floor(save.totalXP / 2000)}</span></div></aside></section><div class="row"><h2>Select Mode</h2><span class="tag">12 QUESTIONS / ROUND</span></div><section class="modes">${[
-    ["mixed", "↔", "6 name/code questions + 6 structure questions"],
-    ["codes", "Aa", "Names and codes in all directions"],
-    ["structures", "⌬", "Match skeletal structures to names and codes"],
-    ["draw", "✎", "Draw structures from memory and self-grade"],
-  ]
-    .map(
-      ([m, ic, txt]) =>
-        `<button class="mode" data-start="${m}"><span class="icon">${ic}</span><strong>${MODES[m]} <span style="float:right">↗</span></strong><small>${txt}</small><small>Best:${save.bests[m] || 0} pts</small></button>`,
-    )
-    .join(
-      "",
-    )}</section><div class="row" style="margin-top:24px"><p>Missed cards return after several steps. Mastered cards switch to typed input.</p><label class="switch"><input id="speed" type="checkbox" ${save.settings.speed ? "checked" : ""}> Speed bonus</label></div><details class="panel"><summary>Progress & History</summary><p>${save.answers} total answers · ${save.fullCorrect} fully correct · ${save.rounds} rounds completed · Best streak: ${save.bestStreak}</p>${
-    save.history.length
-      ? `<table class="history"><thead><tr><th>Date / Mode</th><th>Result</th><th>Score</th></tr></thead><tbody>${save.history
-          .slice(0, 10)
-          .map(
-            (h) =>
-              `<tr><td>${h.date}<br><small>${MODES[h.mode]}</small></td><td>${h.correct}/12</td><td>${h.score}</td></tr>`,
-          )
-          .join("")}</tbody></table>`
-      : "<p>No completed rounds yet.</p>"
-  }</details><p><small>Neutral skeletal forms, backbone below and side chain above. Stereo shown for L-threonine and L-isoleucine. Enter: mixed round · Esc: menu</small></p>`;
-  app
-    .querySelectorAll("[data-start]")
-    .forEach((b) => (b.onclick = () => start(b.dataset.start)));
-  $("#speed").onchange = (e) => {
-    save.settings.speed = e.target.checked;
-    persist();
-  };
+function pick(n){if(state==='choice')grade(round.options[n]===round.answer?1:0);}
+function submit(){if(state==='type')grade(normalize($('#typed').value)===normalize(round.answer)?1:0);}
+function structureCheck(i){return graphMatch(editor,molecule(i));}
+function reveal(){
+  if(state!=='draw')return;state='judge';const paper=$('#paper').checked,correct=!paper&&structureCheck(round.card[0]);editor.freeze();const own=editor.svg.outerHTML,i=round.card[0];
+  $('#answer-area').innerHTML=`<div class="compare">${paper?'':`<div><h3>Your drawing</h3><div class="editor-wrap">${own}</div></div>`}<div><h3>Reference</h3>${img(i)}</div></div><p>${AA[i][3]}</p><p>${paper?'Self-grade your paper drawing.':`Autograder: <strong>${correct?'Match':'No match'}</strong>. Check stereochemistry before accepting.`}</p><div class="actions centered"><button class="primary" id="accept-grade">${paper?'Use self-grade below':`Accept ${correct?'100':'0'}%`}</button></div><details ${paper?'open':''}><summary>Override autograder / partial credit</summary><div class="credit">${[0,.25,.5,.75,1].map(c=>`<button data-credit="${c}">${c*100}%</button>`).join('')}</div></details><small>Atom labels must include heteroatom H (NH₂, OH, etc.); carbon H is implicit. Wedge/dash stereochemistry is reviewed manually. Equivalent aromatic bond placements are accepted.</small>`;
+  $('#accept-grade').hidden=paper;$('#accept-grade').onclick=()=>grade(correct?1:0);app.querySelectorAll('[data-credit]').forEach(b=>b.onclick=()=>grade(+b.dataset.credit));bindZoom();
 }
-function start(mode) {
-  round = {
-    mode,
-    done: 0,
-    correct: 0,
-    score: 0,
-    streak: 0,
-    started: Date.now(),
-    recent: [],
-    mix: [],
-  };
-  for (let n = 0; n < 3; n++)
-    round.mix.push(...shuffle(["codes", "codes", "to", "from"]));
-  next();
+function combinedQuestion(){
+  state='combined';const [i,given]=round.card;
+  questionShell(`<div class="combined-row">${[3,1,2,0].map(a=>`<div class="combined-part"><label ${a===given||a===3?'':`for="part-${a}"`}>${LABELS[a]} ${a===given?'<span class="tag">GIVEN</span>':''}</label>${a===given?(a===3?img(i):`<h2>${AA[i][a]}</h2>`):a===3?'<div id="editor"></div>':`<input id="part-${a}" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">`}</div>`).join('')}</div><small>All three missing parts count equally. Review / override the structure grade before continuing.</small><div class="actions"><button id="check-combined" class="primary">Check all three</button></div>`,'combined-question');
+  if(given!==3)editor=new MoleculeEditor($('#editor'));
+  $('#check-combined').onclick=()=>{
+    if(state!=='combined')return;state='judge';
+    const checks=[0,1,2,3].filter(a=>a!==given).map(a=>({a,ok:a===3?structureCheck(i):normalize($('#part-'+a).value)===normalize(AA[i][a])}));
+    if(editor)editor.freeze();
+    app.querySelectorAll('input').forEach(el=>el.disabled=true);$('#check-combined').remove();
+    const area=document.createElement('div');area.innerHTML=`<div class="panel"><h3>Check</h3>${checks.map(c=>`<p>${LABELS[c.a]}: <strong>${c.ok?'Correct':'Incorrect'}</strong>${c.a<3?' · '+AA[i][c.a]:''}</p>`).join('')}${given!==3?`${img(i)}<label class="switch"><input type="checkbox" id="override-structure" ${checks.find(c=>c.a===3).ok?'checked':''}> Structure correct (override; review stereochemistry)</label>`:''}<button id="accept-combined" class="primary">Continue</button></div>`;$('.combined-question').append(area);bindZoom();
+    $('#accept-combined').onclick=()=>{const s=checks.find(c=>c.a===3);if(s)s.ok=$('#override-structure').checked;grade(checks.filter(c=>c.ok).length/3);};
+  };bindZoom();window.scrollTo(0,0);
 }
-function choose() {
-  let pairs =
-    round.mode === "draw"
-      ? [[0, 4]]
-      : round.mode === "structures"
-        ? STRUCTURES
-        : PAIRS;
-  if (round.mode === "mixed") {
-    let k = round.mix[round.done];
-    pairs =
-      k === "codes"
-        ? PAIRS
-        : STRUCTURES.filter((p) => (p[1] === 3) === (k === "to"));
+function pkaChart(){return `<aside class="pka-panel panel"><h3>pKₐ chart</h3><div class="table-scroll"><table class="pka-table"><thead><tr><th>Amino acid</th><th>α-COOH</th><th>α-amino</th><th>R</th></tr></thead><tbody>${[0,1,2,3].map(group=>`<tr class="group"><th colspan="4">${GROUP_NAMES[group]}</th></tr>${AA.flatMap((a,i)=>GROUPS[i]===group?[`<tr><th scope="row">${a[0]}</th>${PKA[i].map(x=>`<td>${x===null?'—':x.toFixed(2)}</td>`).join('')}</tr>`]:[]).join('')}`).join('')}</tbody></table></div><small>For peptides: pKₐ(N) from the first residue; pKₐ(C) from the last; all ionizable R groups. Use this chart's values as the exercise model.</small></aside>`;}
+function protonQuestion(){
+  state='proton';const i=round.card[0];let sequence=[i];
+  if(Math.random()<.65){const ionizable=[8,12,15,16,17,18,19];sequence=shuffle([i,...shuffle(ionizable.filter(a=>a!==i)).slice(0,Math.random()<.5?1:2)]);}
+  const graph=peptide(sequence);let ph;
+  do{ph=Math.round((.5+Math.random()*13)*10)/10;}while(graph.sites.some(s=>Math.abs(s.pka-ph)<.35));
+  round.proton={sequence,graph,ph,selected:new Set(),width:700+(sequence.length-1)*330};
+  graph.sites.forEach(s=>graph.atoms[s.atom].e=s.base);
+  questionShell(`<div class="chem-layout"><div><div class="row"><h2>${sequence.map(a=>AA[a][1]).join('–')}</h2><span class="ph">pH ${ph.toFixed(1)}</span></div><p>Click every outlined atom that keeps its <strong>ionizable proton</strong>. Fixed heteroatom hydrogens are shown. Click again to remove H⁺.</p><div class="proton-canvas"><div id="proton-svg"></div></div><div class="actions"><button class="primary" id="grade-proton">Next · Grade</button><button id="clear-protons">Clear</button></div><small>Predominant form: protonated below pKₐ, deprotonated above. Peptide-bond nitrogens do not use pKₐ(N).</small></div>${pkaChart()}</div>`,'chem-question');
+  drawProtons();$('#grade-proton').onclick=gradeProtons;$('#clear-protons').onclick=()=>{round.proton.selected.clear();drawProtons();};window.scrollTo(0,0);
+}
+function drawProtons(graded=false){
+  const p=round.proton,g=clone(p.graph);
+  g.sites.forEach((s,index)=>g.atoms[s.atom].e=(graded?p.ph<s.pka:p.selected.has(index))?s.acid:s.base);
+  let svg=graphSVG(g,p.width).replace('<svg ',`<svg style="min-width:${Math.round((p.width-120)*.85)}px" `),circles='';
+  g.sites.forEach((s,index)=>{const a=g.atoms[s.atom],selected=p.selected.has(index),expected=p.ph<s.pka;circles+=`<g class="proton-site ${graded?(selected===expected?'site-correct':'site-wrong'):selected?'selected':''}" ${graded?'':`role="button" tabindex="0" data-site="${index}" aria-pressed="${selected}" aria-label="${AA[s.aa][0]} ${s.kind==='N'?'N terminus':s.kind==='C'?'C terminus':'side chain'} proton"`}><circle cx="${a.x}" cy="${a.y}" r="28"/><title>${AA[s.aa][0]} ${s.kind} · ${graded?'pKa '+s.pka:'Toggle ionizable H⁺'}</title>${(graded?expected:selected)?`<text x="${a.x+23}" y="${a.y-20}">H⁺</text>`:''}</g>`;});
+  svg=svg.replace('</svg>',circles+'</svg>');$('#proton-svg').innerHTML=svg;
+  if(!graded)$('#proton-svg').querySelectorAll('[data-site]').forEach(el=>{const toggle=()=>{const j=+el.dataset.site;p.selected.has(j)?p.selected.delete(j):p.selected.add(j);drawProtons();$('#proton-svg').querySelector(`[data-site="${j}"]`).focus();};el.onclick=toggle;el.onkeydown=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();toggle();}};});
+}
+function gradeProtons(){
+  if(state!=='proton')return;const p=round.proton;const correct=p.graph.sites.filter((s,j)=>(p.ph<s.pka)===p.selected.has(j)).length;
+  drawProtons(true);const svg=$('#proton-svg').innerHTML;
+  const charge=p.graph.sites.reduce((sum,s)=>sum+(p.ph<s.pka?s.charge:s.charge-1),0);
+  round.feedbackHTML=`<h2>${p.sequence.map(i=>AA[i][1]).join('–')} · pH ${p.ph.toFixed(1)}</h2><div class="proton-canvas">${svg}</div><p>${correct} / ${p.graph.sites.length} sites correct · Net charge ${charge>0?'+':''}${charge}</p><table class="history"><thead><tr><th>Site</th><th>pKₐ</th><th>Expected</th><th>Your choice</th></tr></thead><tbody>${p.graph.sites.map((s,j)=>`<tr><td>${AA[s.aa][1]} ${s.kind==='N'?'N terminus':s.kind==='C'?'C terminus':'R group'}</td><td>${s.pka.toFixed(2)}</td><td>${p.ph<s.pka?'Protonated':'Deprotonated'}</td><td>${p.selected.has(j)?'Protonated':'Deprotonated'} ${(p.ph<s.pka)===p.selected.has(j)?'✓':'×'}</td></tr>`).join('')}</tbody></table>`;
+  grade(correct/p.graph.sites.length);
+}
+function hhQuestion(){
+  state='hh';const [i,site]=round.card,pka=PKA[i][site],delta=shuffle([-2,-1.5,-1,-.5,.5,1,1.5,2])[0],ph=+(pka+delta).toFixed(2),ratio=10**delta,task=Math.floor(Math.random()*4);
+  const label=['α-carboxyl','α-amino','side chain'][site];let prompt,answer,unit,explanation;
+  if(task===0){const r=+ratio.toPrecision(5);answer=pka+Math.log10(r);prompt=`The deprotonated : protonated ratio for the ${label} group is <strong>${r} : 1</strong>. Find the pH.`;unit='pH (±0.03)';explanation=`pH = ${pka.toFixed(2)} + log₁₀(${r}) = ${answer.toFixed(3)}`;}
+  else if(task===1){answer=ratio;prompt=`At <strong>pH ${ph.toFixed(2)}</strong>, find the <strong>deprotonated / protonated</strong> ratio for the ${label} group.`;unit='Ratio (2% tolerance)';explanation=`[base] / [acid] = 10^(${ph.toFixed(2)} − ${pka.toFixed(2)}) = ${answer.toPrecision(4)}`;}
+  else if(task===2){answer=1/ratio;prompt=`At <strong>pH ${ph.toFixed(2)}</strong>, find the <strong>protonated / deprotonated</strong> ratio for the ${label} group.`;unit='Ratio (2% tolerance)';explanation=`[acid] / [base] = 10^(${pka.toFixed(2)} − ${ph.toFixed(2)}) = ${answer.toPrecision(4)}`;}
+  else{answer=100/(1+ratio);prompt=`At <strong>pH ${ph.toFixed(2)}</strong>, what <strong>percentage</strong> of the ${label} groups are protonated?`;unit='Percent (±0.1 percentage point)';explanation=`Protonated % = 100 / (1 + 10^(${ph.toFixed(2)} − ${pka.toFixed(2)})) = ${answer.toFixed(3)}%`;}
+  round.hh={i,site,task,answer,explanation,prompt};
+  questionShell(`<div class="chem-layout"><div><h2>${AA[i][0]}</h2><p class="hh-prompt">${prompt}</p><p class="equation">pH = pKₐ + log₁₀([base] / [acid])</p><small>Acid = protonated; base = deprotonated, including amine groups.</small><form id="hh-form"><label for="hh-answer">${unit}</label><input id="hh-answer" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 0.032 or 3.2e-2"><div class="actions"><button class="primary">Check answer</button><button type="button" id="hh-reveal">Show solution</button></div><p class="toast" id="hh-status" role="status"></p></form>${calculatorHTML()}</div>${pkaChart()}</div>`,'chem-question');
+  $('#hh-form').onsubmit=e=>{e.preventDefault();const raw=$('#hh-answer').value.trim().replace(/%$/,'').trim();if(!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(raw)||!Number.isFinite(Number(raw))){$('#hh-status').textContent='Enter a finite number, including scientific notation if needed.';return;}const n=Number(raw),tolerance=task===0?.03:task===3?.1:Math.abs(answer)*.02;round.feedbackHTML=`<h2>${AA[i][0]} · ${label}</h2><p>${prompt}</p><p>Your answer: ${n}</p><p class="equation">${explanation}</p>`;grade(Math.abs(n-answer)<=tolerance+1e-10?1:0);};
+  $('#hh-reveal').onclick=()=>{round.feedbackHTML=`<h2>${AA[i][0]} · ${label}</h2><p>${prompt}</p><p class="equation">${explanation}</p>`;grade(0);};bindCalculator();$('#hh-answer').focus();window.scrollTo(0,0);
+}
+function calculatorHTML(){return `<details class="calculator" open><summary>Calculator</summary><label for="calc-input" class="sr-only">Calculator expression</label><input id="calc-input" type="text" spellcheck="false" autocomplete="off" placeholder="10^(7.4-6.04)"><div class="calc-keys">${['7','8','9','/','log(','4','5','6','*','10^(','1','2','3','-','(', '0','.','^','+',')'].map(k=>`<button type="button" data-calc="${k}">${k}</button>`).join('')}</div><div class="actions"><button type="button" id="calc-equals" class="primary">=</button><button type="button" id="calc-back">⌫</button><button type="button" id="calc-clear">Clear</button><button type="button" id="calc-use">Use result</button></div><output id="calc-output" aria-live="polite"></output><small>log is base 10 · Supports scientific notation and parentheses.</small></details>`;}
+// Recursive descent parser: no eval, external scripts, or account required.
+function calculate(source){
+  if(source.length>240)throw Error('Expression too long.');const s=source.replace(/\s+/g,'');let p=0;
+  const primary=()=>{if(s.startsWith('log(',p)){p+=4;const x=expression();if(s[p++]!==')')throw Error('Missing ).');if(x<=0)throw Error('log requires a positive number.');return Math.log10(x);}if(s[p]==='('){p++;const x=expression();if(s[p++]!==')')throw Error('Missing ).');return x;}const m=s.slice(p).match(/^(?:\d*\.\d+|\d+\.?\d*)(?:e[+-]?\d+)?/i);if(!m)throw Error('Enter a valid expression.');p+=m[0].length;return Number(m[0]);};
+  const power=()=>{let x=primary();if(s[p]==='^'){p++;x=x**unary();}return x;};
+  const unary=()=>{if(s[p]==='+'){p++;return unary();}if(s[p]==='-'){p++;return -unary();}return power();};
+  const term=()=>{let x=unary();while(s[p]==='*'||s[p]==='/'){const op=s[p++],y=unary();x=op==='*'?x*y:x/y;}return x;};
+  const expression=()=>{let x=term();while(s[p]==='+'||s[p]==='-'){const op=s[p++],y=term();x=op==='+'?x+y:x-y;}return x;};
+  const result=expression();if(p!==s.length||!Number.isFinite(result))throw Error('Expression has no finite result.');return result;
+}
+function bindCalculator(){let result=null;
+  const run=()=>{try{result=calculate($('#calc-input').value);$('#calc-output').textContent=Number(result.toPrecision(10)).toString();}catch(e){result=null;$('#calc-output').textContent=e.message;}};
+  app.querySelectorAll('[data-calc]').forEach(b=>b.onclick=()=>{const el=$('#calc-input'),p=el.selectionStart,end=el.selectionEnd;el.value=el.value.slice(0,p)+b.dataset.calc+el.value.slice(end);el.focus();el.setSelectionRange(p+b.dataset.calc.length,p+b.dataset.calc.length);result=null;});
+  $('#calc-equals').onclick=run;$('#calc-input').oninput=()=>result=null;$('#calc-input').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();run();}};
+  $('#calc-clear').onclick=()=>{$('#calc-input').value='';$('#calc-output').textContent='';result=null;};$('#calc-back').onclick=()=>{const el=$('#calc-input'),p=el.selectionStart,end=el.selectionEnd;el.value=el.value.slice(0,p===end?Math.max(0,p-1):p)+el.value.slice(end);result=null;el.focus();el.setSelectionRange(Math.max(0,p-1),Math.max(0,p-1));};
+  $('#calc-use').onclick=()=>{if(result===null)run();if(result!==null){$('#hh-answer').value=Number(result.toPrecision(10));$('#hh-answer').focus();}};
+}
+function grade(credit){
+  if(!['choice','type','judge','proton','hh'].includes(state))return;state='feedback';const k=key(round.card),i=round.card[0],level=save.memory[k]?.[0]||0;
+  save.memory[k]=[Math.round((credit===1?Math.min(8,level+1):credit===0?0:Math.min(8,level+credit*.5))*1000)/1000,Math.floor(Date.now()/1000)];save.retry=save.retry.filter(r=>r.key!==k);if(credit<1)save.retry.push({key:k,due:save.turn+3});
+  round.done++;round.correct+=credit;round.streak=credit===1?round.streak+1:0;let points=credit===1?100+20*Math.min(5,round.streak-1):Math.round(100*credit);
+  if(credit===1&&['mixed','codes','structures'].includes(round.mode)&&!editor&&save.settings.speed)points+=Math.max(0,30-Math.floor((performance.now()-round.asked)/1000)*5);
+  round.score+=points;save.totalXP+=points;save.answers++;save.fullCorrect+=credit===1?1:0;save.bestStreak=Math.max(save.bestStreak,round.streak);
+  const before=save.days[day()]||0;save.days[day()]=before+1;const dates=Object.keys(save.days).sort();for(const d of dates.slice(0,Math.max(0,dates.length-366)))delete save.days[d];persist();ready=performance.now()+(credit===1?250:600);
+  const recovered=credit===1&&round.wasMissed;
+  app.innerHTML=`<section class="question feedback"><span class="eyebrow">${round.done} / 12 · ${round.score} pts</span><h1>${credit===1?`+${points} · Correct`:credit>0?`+${points} · Partial`:'Incorrect'}</h1>${round.feedbackHTML||`<h2>${AA[i].slice(0,3).join(' · ')}</h2>${img(i)}<p>${AA[i][3]}</p>`}<p>${recovered?'<span class="gold">Missed card recovered ✓</span>':credit<1?`${Math.round(credit*100)}% credit · This card will return.`:round.streak>=3?`${round.streak} correct in a row`:''}</p>${before<24&&save.days[day()]>=24?'<p class="gold">Daily target reached</p>':''}<button class="primary" id="next">${round.done===12?'View summary':'Next card'} →</button></section>`;
+  $('#next').onclick=()=>{if(performance.now()>=ready)next();};bindZoom();if(recovered||before<24&&save.days[day()]>=24)celebrate();window.scrollTo(0,0);
+}
+function finish(){
+  state='end';save.rounds++;const gold=Math.abs(round.correct-12)<1e-8,medal=gold?'Gold':round.correct>=10?'Silver':'Complete',old=save.bests[round.mode]||0,isBest=round.score>old;
+  save.bests[round.mode]=Math.max(old,round.score);if(round.correct>=10)save.medals++;const seconds=Math.round((Date.now()-round.started)/1000);
+  save.history.unshift({date:day(),mode:round.mode,correct:Math.min(12,round.correct),score:round.score,seconds});save.history=save.history.slice(0,60);persist();
+  app.innerHTML=`<section class="question panel feedback"><span class="eyebrow">${MODES[round.mode]} · Finished</span>${gold?'<div class="gold-stars" aria-label="Three gold stars"><span>★</span><span>★</span><span>★</span></div>':''}<h1 class="gold">${medal}</h1><h2>${Math.round(round.correct/12*100)}% accuracy</h2><div class="stats"><div class="stat"><strong>${round.score}</strong><small>Points</small></div><div class="stat"><strong>${seconds}s</strong><small>Time</small></div><div class="stat"><strong>${save.bests[round.mode]}</strong><small>Best</small></div></div><p class="gold">${isBest?'New best'+(old?' · +'+(round.score-old)+' points':''):''}</p>${trends(round.mode)}<div class="actions centered"><button class="primary" id="again">Play again</button><button id="menu">Main menu</button></div></section>`;
+  $('#again').onclick=()=>start(round.mode);$('#menu').onclick=home;if(gold){celebrate('gold');thonk(.30);thonk(.47);thonk(.64);}else if(isBest||round.correct>=10)celebrate();
+}
+function atlas(){state='atlas';round=null;
+  app.innerHTML=`<div class="row"><h1>Field guide</h1><span class="tag">${trained()} / 120 MASTERED</span></div><div class="atlas">${AA.map((v,i)=>{const entries=Object.entries(save.memory).filter(([k])=>+k.split(':')[0]===i),level=entries.reduce((s,[,v])=>s+v[0],0);return `<button data-aa="${i}">${img(i)}<strong>${v[0]}</strong><small>${v[1]} · ${v[2]}</small><div class="progress"><div style="width:${Math.min(100,level/(TYPES.length*8)*100)}%"></div></div></button>`;}).join('')}</div>`;
+  app.querySelectorAll('[data-aa]').forEach(b=>b.onclick=()=>{const i=+b.dataset.aa;showModal(`<span class="eyebrow">${AA[i][1]} · ${AA[i][2]}</span><h2>${AA[i][0]}</h2>${img(i)}<p>${AA[i][3]}</p><p>pKₐ: COOH ${PKA[i][0]} · amino ${PKA[i][1]} · R ${PKA[i][2]??'—'}</p><small>${i===4?'L-isoleucine: 2S, 3S':i===11?'L-threonine: 2S, 3R':'Neutral form; alpha stereochemistry unspecified.'}</small>`);});
+}
+// Crockford base32: no I/L/O/U; groups are cosmetic, case/whitespace tolerant.
+const ALPHABET='0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const METRICS=['turn','totalXP','answers','fullCorrect','rounds','medals','bestStreak'];
+function checksum(bytes){let h=2166136261;for(const x of bytes){h^=x;h=Math.imul(h,16777619);}return h>>>0;}
+function base32(bytes){let out='',bits=0,value=0;for(const b of bytes){value=(value<<8)|b;bits+=8;while(bits>=5){bits-=5;out+=ALPHABET[(value>>>bits)&31];}}if(bits)out+=ALPHABET[(value<<(5-bits))&31];return out;}
+function unbase32(s){const out=[];let bits=0,value=0;for(const c of s){const n=ALPHABET.indexOf(c);if(n<0)throw Error('Code contains an unsupported character.');value=(value<<5)|n;bits+=5;if(bits>=8){bits-=8;out.push((value>>>bits)&255);}}if(bits&&(value&((1<<bits)-1)))throw Error('Incomplete code.');return out;}
+function encode(v,hand=false){
+  const bytes=[],put=x=>{if(!Number.isSafeInteger(x)||x<0)throw Error('Invalid save number.');do{let b=x%128;x=Math.floor(x/128);bytes.push(b+(x?128:0));}while(x);},float=x=>{const b=new Uint8Array(8);new DataView(b.buffer).setFloat64(0,x,true);bytes.push(...b);};
+  bytes.push(2);METRICS.forEach(k=>put(v[k]));bytes.push((v.settings.speed?1:0)+(v.settings.sound?2:0)+THEMES.indexOf(v.settings.theme)*4);Object.keys(MODES).forEach(k=>put(v.bests[k]||0));
+  if(hand){
+    const levels=AA.map((_,i)=>{const a=Object.entries(v.memory).filter(([k])=>+k.split(':')[0]===i).map(([,v])=>v[0]);return a.length?Math.min(8,Math.round(a.reduce((s,x)=>s+x,0)/a.length)):0;});
+    for(let i=0;i<20;i+=2)bytes.push(levels[i]+levels[i+1]*16);
+  }else{
+    const memory=Object.entries(v.memory).sort((a,b)=>cardID(a[0].split(':').map(Number))-cardID(b[0].split(':').map(Number)));put(memory.length);let last=0;
+    for(const [k,a]of memory){const id=cardID(k.split(':').map(Number));put(id-last);last=id;put(Math.round(a[0]*1000));put(a[1]);}
+    put(v.retry.length);v.retry.forEach(r=>{put(cardID(r.key.split(':').map(Number)));put(r.due);});
+    const days=Object.entries(v.days).sort((a,b)=>a[0].localeCompare(b[0]));put(days.length);last=0;for(const [d,x]of days){const n=dateNumber(d);put(n-last);last=n;put(x);}
+    put(v.history.length);for(const h of v.history){put(Object.keys(MODES).indexOf(h.mode));put(h.score);float(h.correct);put(h.seconds);put(dateNumber(h.date));}
   }
-  let cards = AA.flatMap((_, i) => pairs.map(([a, b]) => [i, a, b])),
-    keys = new Set(cards.map(key));
-  let retry = save.retry
-    .filter((r) => r.due <= save.turn && keys.has(r.key))
-    .sort((a, b) => a.due - b.due)[0];
-  if (retry) return retry.key.split(":").map(Number);
-  let pending = new Set(save.retry.map((r) => r.key)),
-    pool = cards.filter(
-      (c) => !pending.has(key(c)) && !round.recent.includes(c[0]),
-    );
-  if (!pool.length) pool = cards.filter((c) => !round.recent.includes(c[0]));
-  if (!pool.length) pool = cards;
-  let weights = pool.map((c) => {
-    let [level, seen] = save.memory[key(c)] || [0, 0];
-    return (
-      (1 +
-        (seen
-          ? Math.min(4, Math.max(0, (Date.now() / 1000 - seen) / 86400))
-          : 0)) /
-      (1 + level)
-    );
-  });
-  let r = Math.random() * weights.reduce((a, b) => a + b, 0);
-  return pool.find((c, i) => (r -= weights[i]) < 0) || pool.at(-1);
+  const check=checksum(bytes);for(let i=0;i<4;i++)bytes.push((check>>>(i*8))&255);
+  return (hand?'AH2':'AD2')+'-'+base32(bytes).match(/.{1,5}/g).join('-');
 }
-function next() {
-  if (round.done === 12) {
-    finish();
-    return;
+function decode(code){
+  if(code.length>30000)throw Error('Code too large.');const cleaned=code.toUpperCase().replace(/[\s-]/g,'').replace(/[IL]/g,'1').replace(/O/g,'0'),prefix=cleaned.slice(0,3);
+  if(!['AD2','AH2'].includes(prefix))throw Error('Use an AD2 full backup or AH2 hand code. Old saves are not supported.');
+  const bytes=unbase32(cleaned.slice(3));if(bytes.length<20)throw Error('Code is incomplete.');const body=bytes.slice(0,-4),check=bytes.slice(-4).reduce((s,b,i)=>(s|(b<<(i*8)))>>>0,0);if(checksum(body)!==check)throw Error('Checksum failed. Check every group for a copying error.');
+  let pos=0;const byte=()=>{if(pos>=body.length)throw Error('Code ended early.');return body[pos++];},get=()=>{let x=0,power=1;for(let i=0;i<6;i++){const b=byte();x+=(b&127)*power;if(!Number.isSafeInteger(x)||x>1e12)throw Error('Save number too large.');if(b<128)return x;power*=128;}throw Error('Invalid number.');},count=max=>{const n=get();if(n>max)throw Error('Save has too many entries.');return n;},float=()=>{const a=Uint8Array.from(Array.from({length:8},byte));return new DataView(a.buffer).getFloat64(0,true);};
+  if(byte()!==2)throw Error('Unknown save version.');const v=fresh();METRICS.forEach(k=>v[k]=get());const settings=byte();if(settings>15)throw Error('Invalid settings.');v.settings={speed:!!(settings&1),sound:!!(settings&2),theme:THEMES[settings>>2]};Object.keys(MODES).forEach(k=>v.bests[k]=get());
+  if(prefix==='AH2'){
+    for(let i=0;i<20;i+=2){const b=byte();for(let j=0;j<2;j++){const level=j?b>>4:b&15;if(level>8)throw Error('Invalid mastery.');if(level)for(const [a,t]of TYPES){const k=key([i+j,a,t]);if(validKey(k))v.memory[k]=[level,0];}}}
+  }else{
+    let id=0;for(let n=count(420);n>0;n--){id+=get();if(id>=420)throw Error('Invalid card index.');const k=key(fromID(id));if(Object.hasOwn(v.memory,k))throw Error('Duplicate card.');v.memory[k]=[get()/1000,get()];}
+    for(let n=count(420);n>0;n--){const id=get();if(id>=420)throw Error('Invalid retry card.');v.retry.push({key:key(fromID(id)),due:get()});}
+    let date=0;for(let n=count(366);n>0;n--){date+=get();if(date>dateNumber('9999-12-31'))throw Error('Invalid day.');v.days[dateString(date)]=get();}
+    for(let n=count(60);n>0;n--){const m=get();if(m>=Object.keys(MODES).length)throw Error('Invalid mode.');const score=get(),correct=float(),seconds=get(),date=get();if(date>dateNumber('9999-12-31'))throw Error('Invalid round date.');v.history.push({mode:Object.keys(MODES)[m],score,correct,seconds,date:dateString(date)});}
   }
-  save.turn++;
-  round.card = choose();
-  round.recent.push(round.card[0]);
-  round.recent = round.recent.slice(-3);
-  let [i, a, b] = round.card,
-    level = (save.memory[key(round.card)] || [0])[0];
-  state =
-    round.mode === "draw" ? "draw" : level >= 2 && b < 3 ? "type" : "choice";
-  round.answer = b < 3 ? AA[i][b] : i;
-  app.innerHTML = `<section class="question"><div class="row"><span class="eyebrow">${MODES[round.mode]}</span><span>${round.done + 1} / 12 &nbsp; · &nbsp; ${round.score} pts &nbsp; · &nbsp; <span class="gold">${round.streak} streak</span></span></div><div class="progress"><div style="width:${(round.done / 12) * 100}%"></div></div><div class="prompt"><span class="tag">${state === "draw" ? "DRAW STRUCTURE" : state === "type" ? "TYPE ANSWER" : "SELECT " + LABELS[b].toUpperCase()}</span>${a === 3 ? img(i) : `<h1>${AA[i][a]}</h1>`}</div><div id="answer-area"></div></section>`;
-  const area = $("#answer-area");
-  if (state === "draw") {
-    area.innerHTML = `<div id="editor"></div><label class="switch"><input type="checkbox" id="paper"> Drawing on paper</label><p><small>Start at the central alpha carbon. For proline, connect side chain to N and set NH2 to NH. Include wedges/dashes for threonine and isoleucine.</small></p><button class="primary" id="reveal">Reveal & check</button>`;
-    editor = new MoleculeEditor($("#editor"));
-    $("#paper").onchange = (e) => ($("#editor").hidden = e.target.checked);
-    $("#reveal").onclick = reveal;
-  } else if (state === "type") {
-    area.innerHTML = `<form id="answer-form"><label for="typed" class="muted">${LABELS[b]}</label><input id="typed" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type answer"><div class="actions"><button class="primary" type="submit">Submit</button><button type="button" id="teach">Show answer</button></div></form>`;
-    $("#answer-form").onsubmit = (e) => {
-      e.preventDefault();
-      submit();
-    };
-    $("#teach").onclick = () => grade(0);
-    $("#typed").focus();
-  } else {
-    round.options = shuffle([
-      ...shuffle(
-        AA.map((v, j) => (b === 3 ? j : v[b])).filter(
-          (v) => v !== round.answer,
-        ),
-      ).slice(0, 3),
-      round.answer,
-    ]);
-    area.innerHTML = `<div class="choices">${round.options.map((v, n) => `<button class="choice" data-pick="${n}"><b>${n + 1}</b>${b === 3 ? img(v, "structure", `Option ${n + 1}`) : v}</button>`).join("")}</div><p><small>Select 1–4 or click.${b === 3 ? " Right-click to zoom." : ""}</small></p>`;
-    app
-      .querySelectorAll("[data-pick]")
-      .forEach((btn) => (btn.onclick = () => pick(+btn.dataset.pick)));
-  }
-  bindZoom();
-  round.asked = performance.now();
-  window.scrollTo(0, 0);
+  if(pos!==body.length)throw Error('Unexpected trailing data.');return validate(v);
 }
-function pick(n) {
-  if (state === "choice") grade(round.options[n] === round.answer ? 1 : 0);
+function download(name,text){const url=URL.createObjectURL(new Blob([text],{type:'text/plain'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function importHTML(){return `<label for="import-code">Have a save code?</label><textarea id="import-code" class="compact-code" placeholder="AD2-… full backup or AH2-… hand code" spellcheck="false" autocapitalize="characters"></textarea><div class="actions"><button id="review">Review & restore</button><label class="file-button">Load .txt<input id="import-file" type="file" accept=".txt,text/plain"></label></div><div id="review-area" role="status"></div>`;}
+function bindImport(){
+  $('#import-file').onchange=async e=>{const file=e.target.files[0];if(!file)return;if(file.size>30000){$('#review-area').textContent='Backup file is too large.';return;}try{$('#import-code').value=await file.text();}catch{$('#review-area').textContent='Could not read this file.';}};
+  $('#review').onclick=()=>{try{const raw=$('#import-code').value.trim(),candidate=decode(raw),hand=/^AH2/i.test(raw.replace(/[\s-]/g,''));$('#review-area').innerHTML=`<div class="panel"><h3>Restore ${hand?'hand checkpoint':'full backup'}</h3><p>${candidate.totalXP} XP · ${candidate.rounds} rounds · ${candidate.medals} medals</p><p>${hand?'Scores, settings and approximate mastery only. Retry queue, daily streak and round history will reset.':'All recorded progress, retry cards, settings and history will be restored.'}</p><p>This replaces progress in this browser and ends an active round.</p><button id="confirm-restore" class="primary">Restore this save</button></div>`;
+    $('#confirm-restore').onclick=()=>{save=candidate;blocked=false;try{localStorage.setItem(INTRO_KEY,'1');}catch{}const stored=persist();applyTheme();modal.close();home();if(!stored)$('#storage-warning').textContent='Save restored for this session. Browser storage unavailable; export before closing.';};
+  }catch(e){$('#review-area').textContent=e.message;}};
 }
-function submit() {
-  if (state !== "type") return;
-  let v = $("#typed").value.trim().toLowerCase().replace(/\s+/g, " ");
-  v = { aspartate: "aspartic acid", glutamate: "glutamic acid" }[v] || v;
-  grade(v === round.answer.toLowerCase() ? 1 : 0);
+function readme(first=false){
+  showModal(`<h2>${first?'Welcome to Amino Dash':'Readme'}</h2><p>Progress saves automatically in this browser. Transfer it to any phone, tablet or computer with a save code. No account required.</p>${importHTML()}<div class="actions"><button id="start-practice" class="primary">${first?'Start practicing':'Done'}</button></div><details class="save-help" ${first?'':'open'}><summary>How saves work</summary><ol><li>Open <strong>Save / restore</strong> on your current device.</li><li>Copy a code, download a .txt backup, or write down a hand code.</li><li>On another device, open this app and paste the code here or load the file.</li><li>Review the summary, then restore. Codes work across browsers and operating systems; devices do not sync automatically.</li></ol><p><strong>Full backup (AD2):</strong> exact recorded mastery, scores, missed cards, daily activity, the last 60 rounds and settings.</p><p><strong>Hand code (AH2):</strong> shorter, grouped in five characters, with totals, best scores, settings and rounded average mastery for each amino acid. It omits retries, daily activity and round history. Use a full backup when transferring everything.</p><p>Spaces, hyphens and lowercase are accepted. A checksum catches copy errors. Old save codes are intentionally unsupported. Export before clearing browser data.</p></details>`);
+  bindImport();$('#start-practice').onclick=()=>modal.close();
 }
-function reveal() {
-  if (state !== "draw") return;
-  state = "judge";
-  let paper = $("#paper").checked;
-  editor.selected = null;
-  editor.draw();
-  const own = editor.svg.outerHTML;
-  let i = round.card[0];
-  $("#answer-area").innerHTML =
-    `<div class="compare">${paper ? "" : `<div><h3>Your drawing</h3><div class="editor-wrap">${own}</div></div>`}<div><h3>Reference</h3>${img(i)}</div></div><p>${AA[i][3]}</p><p>Compare bonds, atom labels, rings, and stereochemistry. Grade your accuracy:</p><div class="credit">${[0, 0.25, 0.5, 0.75, 1].map((c) => `<button data-credit="${c}" class="${c === 1 ? "primary" : ""}">${c * 100}%</button>`).join("")}</div><p><small>Scores under 100% will re-queue this card later in practice.</small></p>`;
-  app
-    .querySelectorAll("[data-credit]")
-    .forEach((b) => (b.onclick = () => grade(+b.dataset.credit)));
-  bindZoom();
+function backup(){
+  showModal(`<h2>Save / restore</h2><label for="save-kind">Save format</label><select id="save-kind"><option value="full">Full backup · all progress</option><option value="hand">Hand code · compact checkpoint</option></select><p id="format-note"></p><label for="export-code">Current save code <small id="code-size"></small></label><textarea id="export-code" readonly spellcheck="false"></textarea><div class="actions"><button id="copy" class="primary">Copy code</button><button id="download">Download .txt</button></div><p class="toast" id="save-status" role="status"></p><hr>${importHTML()}`);
+  let code;const refresh=()=>{const hand=$('#save-kind').value==='hand';code=encode(save,hand);$('#export-code').value=code;$('#code-size').textContent=`· ${code.replace(/-/g,'').length} characters`;$('#format-note').textContent=hand?'Keeps scores, bests, settings and approximate per-amino-acid mastery. Omits retries, daily streak and history.':'Keeps all recorded progress. For copying by hand, choose the shorter hand code.';$('#save-status').textContent='';};refresh();$('#save-kind').onchange=refresh;
+  $('#copy').onclick=async()=>{try{await navigator.clipboard.writeText(code);$('#save-status').textContent='Copied.';}catch{$('#export-code').select();$('#save-status').textContent='Press Ctrl+C / ⌘C to copy the selected code.';}};$('#download').onclick=()=>download('amino-dash-'+($('#save-kind').value)+'-save.txt',code);bindImport();
 }
-function grade(credit) {
-  if (!["choice", "type", "judge"].includes(state)) return;
-  state = "feedback";
-  let k = key(round.card),
-    i = round.card[0],
-    level = save.memory[k]?.[0] || 0;
-  save.memory[k] = [
-    credit === 1
-      ? Math.min(8, level + 1)
-      : credit === 0
-        ? 0
-        : Math.min(8, level + credit * 0.5),
-    Date.now() / 1000,
-  ];
-  save.retry = save.retry.filter((r) => r.key !== k);
-  if (credit < 1) save.retry.push({ key: k, due: save.turn + 3 });
-  round.done++;
-  round.correct += credit;
-  round.streak = credit === 1 ? round.streak + 1 : 0;
-  let points =
-    credit === 1
-      ? 100 + 20 * Math.min(5, round.streak - 1)
-      : Math.round(100 * credit);
-  if (credit === 1 && round.mode !== "draw" && save.settings.speed)
-    points += Math.max(
-      0,
-      30 - Math.floor((performance.now() - round.asked) / 1000) * 5,
-    );
-  round.score += points;
-  save.totalXP += points;
-  save.answers++;
-  save.fullCorrect += credit === 1 ? 1 : 0;
-  save.bestStreak = Math.max(save.bestStreak, round.streak);
-  let before = save.days[day()] || 0;
-  save.days[day()] = before + 1;
-  persist();
-  ready = performance.now() + (credit === 1 ? 250 : 800);
-  app.innerHTML = `<section class="question feedback celebrate"><span class="eyebrow">${round.done} / 12 · ${round.score} pts</span><h1>${credit === 1 ? `+${points} · Correct` : credit > 0 ? `+${points} · Partial` : "Incorrect"}</h1><h2>${AA[i].slice(0, 3).join(" · ")}</h2>${img(i)}<p>${AA[i][3]}</p><small>${i === 11 ? "L-threonine: 2S, 3R" : i === 4 ? "L-isoleucine: 2S, 3S" : "Neutral skeletal form · C / carbon-bound H implicit"}</small><p>${credit === 1 ? (round.streak >= 3 ? `${round.streak} correct in a row.` : "") : credit > 0 ? `${credit * 100}% credit awarded. This card will repeat.` : "This card will return later in practice."}</p>${before < 24 && save.days[day()] >= 24 ? '<p class="gold">Daily target reached (24 answers).</p>' : ""}<button class="primary" id="next">${round.done === 12 ? "View Summary" : "Next Card"} →</button></section>`;
-  $("#next").onclick = () => {
-    if (performance.now() >= ready) next();
-  };
-  bindZoom();
-}
-function finish() {
-  state = "end";
-  save.rounds++;
-  const medal =
-      round.correct === 12
-        ? "Gold"
-        : round.correct >= 10
-          ? "Silver"
-          : "Complete",
-    old = save.bests[round.mode] || 0,
-    isBest = round.score > old;
-  save.bests[round.mode] = Math.max(old, round.score);
-  if (round.correct >= 10) save.medals++;
-  let seconds = Math.round((Date.now() - round.started) / 1000);
-  save.history.unshift({
-    date: day(),
-    mode: round.mode,
-    correct: round.correct,
-    score: round.score,
-    seconds,
-  });
-  save.history = save.history.slice(0, 50);
-  persist();
-  app.innerHTML = `<section class="question panel feedback celebrate"><span class="eyebrow">${MODES[round.mode]} · Finished</span><h1 class="gold">${medal}</h1><h2>${round.correct} / 12 ${round.mode === "draw" ? "credit" : "correct"}</h2><div class="stats"><div class="stat"><strong>${round.score}</strong><small>Points</small></div><div class="stat"><strong>${seconds}s</strong><small>Time</small></div><div class="stat"><strong>${save.bests[round.mode]}</strong><small>Best</small></div></div><p class="gold">${isBest ? "New best score." : `Current best: ${save.bests[round.mode]} pts`}</p><p>Completed round. Missed cards will cycle into future rounds.</p><div class="actions" style="justify-content:center"><button class="primary" id="again">Play again</button><button id="menu">Main menu</button></div></section>`;
-  $("#again").onclick = () => start(round.mode);
-  $("#menu").onclick = home;
-}
-function atlas() {
-  state = "atlas";
-  round = null;
-  app.innerHTML = `<div class="row"><div><span class="eyebrow">Index</span><h1>Amino Acids Reference</h1></div><span class="tag">${trained()} / 120 MASTERED</span></div><p>Click any card to inspect structure and side-chain details. Progress bars indicate recall level.</p><div class="atlas">${AA.map(
-    (v, i) => {
-      let level = Object.entries(save.memory)
-        .filter(([k]) => +k.split(":")[0] === i)
-        .reduce((s, [k, v]) => s + v[0], 0);
-      return `<button data-aa="${i}">${img(i)}<strong>${v[0]}</strong><small>${v[1]} ·${v[2]}</small><div class="progress"><div style="width:${(level / 104) * 100}%"></div></div></button>`;
-    },
-  ).join("")}</div>`;
-  app.querySelectorAll("[data-aa]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        let i = +b.dataset.aa;
-        $("#modal-body").innerHTML =
-          `<span class="eyebrow">${AA[i][1]} · ${AA[i][2]}</span><h2>${AA[i][0]}</h2>${img(i)}<p>${AA[i][3]}</p><p>${i === 4 ? "L-isoleucine: 2S, 3S" : i === 11 ? "L-threonine: 2S, 3R" : "Neutral form; alpha stereochemistry unspecified."}</p>`;
-        modal.showModal();
-      }),
-  );
-}
-// FNV-1a detects accidental copy corruption; this is not encryption or authentication.
-function checksum(s) {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0).toString(16).padStart(8, "0");
-}
-function encode(v) {
-  let raw = JSON.stringify(v),
-    payload = btoa(raw)
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-  return `AD1.${payload}.${checksum(payload)}`;
-}
-function decode(code) {
-  if (code.length > 2000000) throw Error("Save data too large.");
-  let parts = code.replace(/\s/g, "").split(".");
-  if (
-    parts.length !== 3 ||
-    parts[0] !== "AD1" ||
-    checksum(parts[1]) !== parts[2]
-  )
-    throw Error(
-      "Code is invalid or incomplete. Verify the entire string was copied.",
-    );
-  return validate(
-    JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))),
-  );
-}
-function download(name, txt) {
-  const url = URL.createObjectURL(new Blob([txt], { type: "text/plain" })),
-    a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-function backup() {
-  const code = encode(save);
-  $("#modal-body").innerHTML =
-    `<h2>Backup & Restore</h2><p>Progress is saved locally in this browser. Export a backup before clearing site data or switching browsers.</p><label for="export-code">Current export code</label><textarea id="export-code" readonly spellcheck="false"></textarea><div class="actions"><button id="copy" class="primary">Copy code</button><button id="download">Download backup file</button>${blocked ? '<button id="raw">Download unreadable local data</button>' : ""}</div><p class="toast" id="save-status" role="status"></p><hr style="border:0;border-top:1px solid var(--line)"><h3>Import Backup</h3><p>Paste an AD1 export code or valid legacy JSON to restore progress.</p><textarea id="import-code" placeholder="AD1... or JSON" spellcheck="false" aria-label="Progress code to restore"></textarea><button id="review" style="margin-top:12px">Review backup</button><div id="review-area" role="status"></div>`;
-  $("#export-code").value = code;
-  $("#copy").onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-      $("#save-status").textContent = "Copied to clipboard.";
-    } catch {
-      $("#export-code").select();
-      $("#save-status").textContent = "Select and press Ctrl+C (⌘C) to copy.";
-    }
-  };
-  $("#download").onclick = () => download("amino-dash-progress.txt", code);
-  if ($("#raw"))
-    $("#raw").onclick = () => {
-      try {
-        download(
-          "amino-dash-unreadable-save.txt",
-          localStorage.getItem(SAVE_KEY) || "",
-        );
-      } catch {
-        $("#save-status").textContent = "Browser storage cannot be accessed.";
-      }
-    };
-  $("#review").onclick = () => {
-    try {
-      let raw = $("#import-code").value.trim(),
-        candidate;
-      if (raw.startsWith("{")) {
-        let legacy = JSON.parse(raw);
-        if (legacy.version) candidate = validate(legacy);
-        else {
-          candidate = fresh();
-          if (
-            !legacy ||
-            Array.isArray(legacy) ||
-            Object.keys(legacy).length > 260
-          )
-            throw Error("Invalid JSON format.");
-          for (let [k, v] of Object.entries(legacy)) {
-            if (
-              !validKey(k) ||
-              !Array.isArray(v) ||
-              v.length !== 2 ||
-              !v.every(
-                (x) => typeof x === "number" && Number.isFinite(x) && x >= 0,
-              )
-            )
-              throw Error("Invalid card data.");
-            candidate.memory[k] = [Math.min(8, v[0]), v[1]];
-          }
-          candidate = validate(candidate);
-        }
-      } else candidate = decode(raw);
-      $("#review-area").innerHTML =
-        `<div class="panel" style="margin-top:14px"><h3>Backup Summary</h3><p>${candidate.totalXP} XP · ${candidate.rounds} completed rounds · ${Object.keys(candidate.memory).length} cards recorded</p><p>Restoring will replace existing data in this browser session.</p><button id="confirm-restore" class="primary">Confirm & restore</button></div>`;
-      $("#confirm-restore").onclick = () => {
-        save = candidate;
-        blocked = false;
-        const stored = persist();
-        modal.close();
-        home();
-        if (!stored)
-          $("#storage-warning").textContent =
-            "Backup active for this session, but local storage could not be updated.";
-      };
-    } catch (e) {
-      $("#review-area").textContent = "Could not parse backup: " + e.message;
-    }
-  };
-  modal.showModal();
-}
-$("#close-modal").onclick = () => modal.close();
-$("#home").onclick = home;
-$("#brand").onclick = (e) => {
-  e.preventDefault();
-  home();
-};
-$("#atlas").onclick = atlas;
-$("#backup").onclick = backup;
-document.addEventListener("keydown", (e) => {
-  if (modal.open) return;
-  if (e.key === "Escape") {
-    home();
-    return;
-  }
-  if (
-    e.repeat ||
-    e.ctrlKey ||
-    e.metaKey ||
-    e.altKey ||
-    ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(
-      document.activeElement.tagName,
-    )
-  )
-    return;
-  if (state === "choice" && /^[1-4]$/.test(e.key)) {
-    e.preventDefault();
-    pick(+e.key - 1);
-  } else if (e.key === "Enter" || e.code === "Space") {
-    e.preventDefault();
-    if (state === "home" && e.key === "Enter") start("mixed");
-    else if (state === "end" && e.key === "Enter") start(round.mode);
-    else if (state === "draw") reveal();
-    else if (state === "feedback" && performance.now() >= ready) next();
-  }
-});
-window.addEventListener("storage", (e) => {
-  if (e.key === SAVE_KEY) {
-    blocked = true;
-    $("#storage-warning").textContent =
-      "Progress updated in another tab. Reload this page to load the newest save.";
-  }
-});
-home();
+$('#close-modal').onclick=()=>modal.close();modal.addEventListener('close',()=>{try{localStorage.setItem(INTRO_KEY,'1');}catch{}});
+$('#home').onclick=home;$('#brand').onclick=e=>{e.preventDefault();home();};$('#atlas').onclick=atlas;$('#backup').onclick=backup;$('#readme').onclick=()=>readme();$('#theme').onchange=e=>{save.settings.theme=e.target.value;applyTheme();persist();};
+document.addEventListener('keydown',e=>{if(modal.open)return;if(e.key==='Escape'){home();return;}if(e.repeat||e.ctrlKey||e.metaKey||e.altKey||['INPUT','TEXTAREA','SELECT','BUTTON','A','SUMMARY'].includes(document.activeElement.tagName)||document.activeElement.closest('[data-site]'))return;if(state==='choice'&&/^[1-4]$/.test(e.key)){e.preventDefault();pick(+e.key-1);}else if(e.key==='Enter'||e.code==='Space'){e.preventDefault();if(state==='home'&&e.key==='Enter')start('mixed');else if(state==='end'&&e.key==='Enter')start(round.mode);else if(state==='draw')reveal();else if(state==='feedback'&&performance.now()>=ready)next();}});
+window.addEventListener('storage',e=>{if(e.key===SAVE_KEY||e.key===null){blocked=true;$('#storage-warning').textContent='Progress changed in another tab. Reload to load the latest save.';}});
+applyTheme();home();let firstLoad=true;try{firstLoad=!localStorage.getItem(INTRO_KEY);}catch{}if(firstLoad)readme(true);
