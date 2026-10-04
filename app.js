@@ -22,10 +22,10 @@ const STRUCTURES = [
     "skeletal structure",
   ];
 const MODES = {
-  mixed: "Mixed training",
-  codes: "Names & codes",
-  structures: "Structure match",
-  draw: "Drawing studio",
+  mixed: "Mixed",
+  codes: "Names & Codes",
+  structures: "Structures",
+  draw: "Drawing",
 };
 const SAVE_KEY =
   "amino-dash:v1:" + location.pathname.replace(/index\.html$/, "");
@@ -169,7 +169,7 @@ try {
   blocked = true;
   storageOK = false;
   $("#storage-warning").textContent =
-    "Your browser save could not be read. Existing data will not be overwritten. Use Save / restore to export the stored data or restore a backup.";
+    "Local save data could not be read. Use Save / restore to import or inspect backups.";
 }
 function persist() {
   if (blocked) return false;
@@ -181,7 +181,7 @@ function persist() {
   } catch {
     storageOK = false;
     $("#storage-warning").textContent =
-      "Browser storage is unavailable or full. This session works, but export a progress code before closing it.";
+      "Browser storage is unavailable or full. Export a backup before closing.";
     return false;
   }
 }
@@ -190,7 +190,7 @@ function img(i, cls = "structure", alt = "Amino acid skeletal structure") {
 }
 function zoom(i) {
   $("#modal-body").innerHTML =
-    `<h2>Structure detail</h2>${img(i)}<p>Neutral form · Carbon-bound hydrogen implicit</p>`;
+    `<h2>Structure</h2>${img(i)}<p>Neutral form · Carbon-bound hydrogen implicit</p>`;
   modal.showModal();
 }
 function bindZoom() {
@@ -232,28 +232,28 @@ function home() {
   state = "home";
   round = null;
   let today = save.days[day()] || 0;
-  app.innerHTML = `<section class="hero"><div><span class="eyebrow">Your daily recall workout</span><h1>Small molecules.<br><span style="color:var(--green)">Big brain energy.</span></h1><p>Learn all 20 amino acids, one fast round at a time. Build your streak. Turn recognition into recall.</p><div class="stats"><div class="stat"><strong>${save.totalXP.toLocaleString()}</strong><small>Total XP</small></div><div class="stat"><strong>${streakDays()}</strong><small>Day streak</small></div><div class="stat"><strong>${save.medals}</strong><small>Medals earned</small></div></div></div><aside class="panel"><div class="row"><span class="eyebrow">Daily goal</span><span class="tag">${today >= 24 ? "COMPLETE ✓" : "24 ANSWERS"}</span></div><h2>${Math.min(today, 24)} <span class="muted">/ 24</span></h2><div class="progress"><div style="width:${Math.min(100, (today / 24) * 100)}%"></div></div><p>${today >= 24 ? "Goal complete. Come back tomorrow or chase a personal best." : "Two short rounds. One stronger memory."}</p><hr style="border:0;border-top:1px solid var(--line)"><small>Typed recall unlocked</small><div class="row"><strong>${trained()} / 120 directions</strong><span class="gold">Level ${1 + Math.floor(save.totalXP / 2000)}</span></div></aside></section><div class="row"><h2>Choose your next round</h2><span class="tag">12 QUESTIONS · 10 CORRECT = MEDAL</span></div><section class="modes">${[
-    ["mixed", "↔", "Six name/code + six structure questions"],
-    ["codes", "Aa", "All six directions. Type what you know."],
-    ["structures", "⌬", "Match structures to names and both codes"],
-    ["draw", "✎", "Build a molecule. Reveal. Give yourself credit."],
+  app.innerHTML = `<section class="hero"><div><span class="eyebrow">Practice</span><h1>Amino Acids</h1><p>Review structures, 3-letter codes, 1-letter codes, and names for all 20 standard amino acids.</p><div class="stats"><div class="stat"><strong>${save.totalXP.toLocaleString()}</strong><small>Total XP</small></div><div class="stat"><strong>${streakDays()}</strong><small>Day streak</small></div><div class="stat"><strong>${save.medals}</strong><small>Medals</small></div></div></div><aside class="panel"><div class="row"><span class="eyebrow">Daily Target</span><span class="tag">${today >= 24 ? "COMPLETE" : "24 ANSWERS"}</span></div><h2>${Math.min(today, 24)} <span class="muted">/ 24</span></h2><div class="progress"><div style="width:${Math.min(100, (today / 24) * 100)}%"></div></div><p>${today >= 24 ? "Target reached for today." : "Answer 24 cards to hit the daily target."}</p><hr style="border:0;border-top:1px solid var(--line)"><small>Mastered prompts</small><div class="row"><strong>${trained()} / 120 directions</strong><span class="gold">Level ${1 + Math.floor(save.totalXP / 2000)}</span></div></aside></section><div class="row"><h2>Select Mode</h2><span class="tag">12 QUESTIONS / ROUND</span></div><section class="modes">${[
+    ["mixed", "↔", "6 name/code questions + 6 structure questions"],
+    ["codes", "Aa", "Names and codes in all directions"],
+    ["structures", "⌬", "Match skeletal structures to names and codes"],
+    ["draw", "✎", "Draw structures from memory and self-grade"],
   ]
     .map(
       ([m, ic, txt]) =>
-        `<button class="mode" data-start="${m}"><span class="icon">${ic}</span><strong>${MODES[m]} <span style="float:right">↗</span></strong><small>${txt}</small><small>Best: ${save.bests[m] || 0} points</small></button>`,
+        `<button class="mode" data-start="${m}"><span class="icon">${ic}</span><strong>${MODES[m]} <span style="float:right">↗</span></strong><small>${txt}</small><small>Best:${save.bests[m] || 0} pts</small></button>`,
     )
     .join(
       "",
-    )}</section><div class="row" style="margin-top:24px"><p>Misses return soon. Older cards get priority. Familiar cards become typed recall.</p><label class="switch"><input id="speed" type="checkbox" ${save.settings.speed ? "checked" : ""}> Speed bonus</label></div><details class="panel"><summary>My progress & recent rounds</summary><p>${save.answers} answers · ${save.fullCorrect} fully correct · ${save.rounds} completed rounds · Best combo ${save.bestStreak}</p>${
+    )}</section><div class="row" style="margin-top:24px"><p>Missed cards return after several steps. Mastered cards switch to typed input.</p><label class="switch"><input id="speed" type="checkbox" ${save.settings.speed ? "checked" : ""}> Speed bonus</label></div><details class="panel"><summary>Progress & History</summary><p>${save.answers} total answers · ${save.fullCorrect} fully correct · ${save.rounds} rounds completed · Best streak: ${save.bestStreak}</p>${
     save.history.length
-      ? `<table class="history"><thead><tr><th>Date / mode</th><th>Credit</th><th>Score</th></tr></thead><tbody>${save.history
+      ? `<table class="history"><thead><tr><th>Date / Mode</th><th>Result</th><th>Score</th></tr></thead><tbody>${save.history
           .slice(0, 10)
           .map(
             (h) =>
               `<tr><td>${h.date}<br><small>${MODES[h.mode]}</small></td><td>${h.correct}/12</td><td>${h.score}</td></tr>`,
           )
           .join("")}</tbody></table>`
-      : "<p>Your first round starts the story.</p>"
+      : "<p>No completed rounds yet.</p>"
   }</details><p><small>Neutral skeletal forms, backbone below and side chain above. Stereo shown for L-threonine and L-isoleucine. Enter: mixed round · Esc: menu</small></p>`;
   app
     .querySelectorAll("[data-start]")
@@ -331,15 +331,15 @@ function next() {
   state =
     round.mode === "draw" ? "draw" : level >= 2 && b < 3 ? "type" : "choice";
   round.answer = b < 3 ? AA[i][b] : i;
-  app.innerHTML = `<section class="question"><div class="row"><span class="eyebrow">${MODES[round.mode]}</span><span>${round.done + 1} / 12 &nbsp; · &nbsp; ${round.score} pts &nbsp; · &nbsp; <span class="gold">${round.streak} combo</span></span></div><div class="progress"><div style="width:${(round.done / 12) * 100}%"></div></div><div class="prompt"><span class="tag">${state === "draw" ? "DRAW THE SKELETAL STRUCTURE" : state === "type" ? "TYPED RECALL" : "GIVE THE " + LABELS[b].toUpperCase()}</span>${a === 3 ? img(i) : `<h1>${AA[i][a]}</h1>`}</div><div id="answer-area"></div></section>`;
+  app.innerHTML = `<section class="question"><div class="row"><span class="eyebrow">${MODES[round.mode]}</span><span>${round.done + 1} / 12 &nbsp; · &nbsp; ${round.score} pts &nbsp; · &nbsp; <span class="gold">${round.streak} streak</span></span></div><div class="progress"><div style="width:${(round.done / 12) * 100}%"></div></div><div class="prompt"><span class="tag">${state === "draw" ? "DRAW STRUCTURE" : state === "type" ? "TYPE ANSWER" : "SELECT " + LABELS[b].toUpperCase()}</span>${a === 3 ? img(i) : `<h1>${AA[i][a]}</h1>`}</div><div id="answer-area"></div></section>`;
   const area = $("#answer-area");
   if (state === "draw") {
-    area.innerHTML = `<div id="editor"></div><label class="switch"><input type="checkbox" id="paper"> I’m drawing on paper</label><p><small>Start at the central alpha carbon. For proline, connect the side chain back to N and change NH2 to NH. Include wedges/dashes for threonine and isoleucine.</small></p><button class="primary" id="reveal">Reveal & compare →</button>`;
+    area.innerHTML = `<div id="editor"></div><label class="switch"><input type="checkbox" id="paper"> Drawing on paper</label><p><small>Start at the central alpha carbon. For proline, connect side chain to N and set NH2 to NH. Include wedges/dashes for threonine and isoleucine.</small></p><button class="primary" id="reveal">Reveal & check</button>`;
     editor = new MoleculeEditor($("#editor"));
     $("#paper").onchange = (e) => ($("#editor").hidden = e.target.checked);
     $("#reveal").onclick = reveal;
   } else if (state === "type") {
-    area.innerHTML = `<form id="answer-form"><label for="typed" class="muted">${LABELS[b]}</label><input id="typed" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type your answer…"><div class="actions"><button class="primary" type="submit">Check answer ↵</button><button type="button" id="teach">Not sure — teach me</button></div></form>`;
+    area.innerHTML = `<form id="answer-form"><label for="typed" class="muted">${LABELS[b]}</label><input id="typed" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type answer"><div class="actions"><button class="primary" type="submit">Submit</button><button type="button" id="teach">Show answer</button></div></form>`;
     $("#answer-form").onsubmit = (e) => {
       e.preventDefault();
       submit();
@@ -355,7 +355,7 @@ function next() {
       ).slice(0, 3),
       round.answer,
     ]);
-    area.innerHTML = `<div class="choices">${round.options.map((v, n) => `<button class="choice" data-pick="${n}"><b>${n + 1}</b>${b === 3 ? img(v, "structure", `Structure option ${n + 1}`) : v}</button>`).join("")}</div><p><small>Choose with 1–4 or click.${b === 3 ? " Right-click a structure to enlarge." : ""}</small></p>`;
+    area.innerHTML = `<div class="choices">${round.options.map((v, n) => `<button class="choice" data-pick="${n}"><b>${n + 1}</b>${b === 3 ? img(v, "structure", `Option ${n + 1}`) : v}</button>`).join("")}</div><p><small>Select 1–4 or click.${b === 3 ? " Right-click to zoom." : ""}</small></p>`;
     app
       .querySelectorAll("[data-pick]")
       .forEach((btn) => (btn.onclick = () => pick(+btn.dataset.pick)));
@@ -382,7 +382,7 @@ function reveal() {
   const own = editor.svg.outerHTML;
   let i = round.card[0];
   $("#answer-area").innerHTML =
-    `<div class="compare">${paper ? "" : `<div><h3>Your drawing</h3><div class="editor-wrap">${own}</div></div>`}<div><h3>Reference answer</h3>${img(i)}</div></div><p>${AA[i][3]}</p><p>Check connectivity, atom labels, bonds, rings, and any required stereochemistry. How much did you get right?</p><div class="credit">${[0, 0.25, 0.5, 0.75, 1].map((c) => `<button data-credit="${c}" class="${c === 1 ? "primary" : ""}">${c * 100}%</button>`).join("")}</div><p><small>Partial credit earns XP and gently builds familiarity. Anything below 100% returns for another try. Drawing is self-graded.</small></p>`;
+    `<div class="compare">${paper ? "" : `<div><h3>Your drawing</h3><div class="editor-wrap">${own}</div></div>`}<div><h3>Reference</h3>${img(i)}</div></div><p>${AA[i][3]}</p><p>Compare bonds, atom labels, rings, and stereochemistry. Grade your accuracy:</p><div class="credit">${[0, 0.25, 0.5, 0.75, 1].map((c) => `<button data-credit="${c}" class="${c === 1 ? "primary" : ""}">${c * 100}%</button>`).join("")}</div><p><small>Scores under 100% will re-queue this card later in practice.</small></p>`;
   app
     .querySelectorAll("[data-credit]")
     .forEach((b) => (b.onclick = () => grade(+b.dataset.credit)));
@@ -425,7 +425,7 @@ function grade(credit) {
   save.days[day()] = before + 1;
   persist();
   ready = performance.now() + (credit === 1 ? 250 : 800);
-  app.innerHTML = `<section class="question feedback celebrate"><span class="eyebrow">${round.done} / 12 · ${round.score} points</span><h1>${credit === 1 ? `+${points} · Nailed it.` : credit > 0 ? `+${points} · Getting there.` : "Learn it. Win it."}</h1><h2>${AA[i].slice(0, 3).join(" · ")}</h2>${img(i)}<p>${AA[i][3]}</p><small>${i === 11 ? "L-threonine: 2S, 3R" : i === 4 ? "L-isoleucine: 2S, 3S" : "Neutral skeletal form · C / carbon-bound H implicit"}</small><p>${credit === 1 ? (round.streak >= 3 ? `${round.streak} in a row! Your combo is building.` : "Keep the streak going.") : credit > 0 ? `${credit * 100}% credit. You’ll get another chance at this card.` : "Say the name and both codes aloud. This card will return."}</p>${before < 24 && save.days[day()] >= 24 ? '<p class="gold">✓ Daily goal complete — 24 answers!</p>' : ""}<button class="primary" id="next">${round.done === 12 ? "See results" : "Next card"} →</button></section>`;
+  app.innerHTML = `<section class="question feedback celebrate"><span class="eyebrow">${round.done} / 12 · ${round.score} pts</span><h1>${credit === 1 ? `+${points} · Correct` : credit > 0 ? `+${points} · Partial` : "Incorrect"}</h1><h2>${AA[i].slice(0, 3).join(" · ")}</h2>${img(i)}<p>${AA[i][3]}</p><small>${i === 11 ? "L-threonine: 2S, 3R" : i === 4 ? "L-isoleucine: 2S, 3S" : "Neutral skeletal form · C / carbon-bound H implicit"}</small><p>${credit === 1 ? (round.streak >= 3 ? `${round.streak} correct in a row.` : "") : credit > 0 ? `${credit * 100}% credit awarded. This card will repeat.` : "This card will return later in practice."}</p>${before < 24 && save.days[day()] >= 24 ? '<p class="gold">Daily target reached (24 answers).</p>' : ""}<button class="primary" id="next">${round.done === 12 ? "View Summary" : "Next Card"} →</button></section>`;
   $("#next").onclick = () => {
     if (performance.now() >= ready) next();
   };
@@ -436,10 +436,10 @@ function finish() {
   save.rounds++;
   const medal =
       round.correct === 12
-        ? "Gold medal"
+        ? "Gold"
         : round.correct >= 10
-          ? "Silver medal"
-          : "Round complete",
+          ? "Silver"
+          : "Complete",
     old = save.bests[round.mode] || 0,
     isBest = round.score > old;
   save.bests[round.mode] = Math.max(old, round.score);
@@ -454,19 +454,19 @@ function finish() {
   });
   save.history = save.history.slice(0, 50);
   persist();
-  app.innerHTML = `<section class="question panel feedback celebrate"><span class="eyebrow">${MODES[round.mode]} · COMPLETE</span><h1 class="gold">${medal} ${round.correct >= 10 ? "✦" : ""}</h1><h2>${round.correct} / 12 ${round.mode === "draw" ? "credit" : "correct"}</h2><div class="stats"><div class="stat"><strong>${round.score}</strong><small>Points</small></div><div class="stat"><strong>${seconds}s</strong><small>Round time</small></div><div class="stat"><strong>${save.bests[round.mode]}</strong><small>Personal best</small></div></div><p class="gold">${isBest ? "New personal best!" : `Your best is ${save.bests[round.mode]}. Keep building recall.`}</p><p>Every miss is a target for your next round.<br>Aim for 12/12 as familiar cards become typed recall.</p><div class="actions" style="justify-content:center"><button class="primary" id="again">One more round ↵</button><button id="menu">Back to menu</button></div></section>`;
+  app.innerHTML = `<section class="question panel feedback celebrate"><span class="eyebrow">${MODES[round.mode]} · Finished</span><h1 class="gold">${medal}</h1><h2>${round.correct} / 12 ${round.mode === "draw" ? "credit" : "correct"}</h2><div class="stats"><div class="stat"><strong>${round.score}</strong><small>Points</small></div><div class="stat"><strong>${seconds}s</strong><small>Time</small></div><div class="stat"><strong>${save.bests[round.mode]}</strong><small>Best</small></div></div><p class="gold">${isBest ? "New best score." : `Current best: ${save.bests[round.mode]} pts`}</p><p>Completed round. Missed cards will cycle into future rounds.</p><div class="actions" style="justify-content:center"><button class="primary" id="again">Play again</button><button id="menu">Main menu</button></div></section>`;
   $("#again").onclick = () => start(round.mode);
   $("#menu").onclick = home;
 }
 function atlas() {
   state = "atlas";
   round = null;
-  app.innerHTML = `<div class="row"><div><span class="eyebrow">20 molecules to know</span><h1>Field guide</h1></div><span class="tag">${trained()} / 120 TYPED DIRECTIONS</span></div><p>Open a card for its structure and side chain. The bar tracks familiarity across all 13 recall directions, including drawing.</p><div class="atlas">${AA.map(
+  app.innerHTML = `<div class="row"><div><span class="eyebrow">Index</span><h1>Amino Acids Reference</h1></div><span class="tag">${trained()} / 120 MASTERED</span></div><p>Click any card to inspect structure and side-chain details. Progress bars indicate recall level.</p><div class="atlas">${AA.map(
     (v, i) => {
       let level = Object.entries(save.memory)
         .filter(([k]) => +k.split(":")[0] === i)
         .reduce((s, [k, v]) => s + v[0], 0);
-      return `<button data-aa="${i}">${img(i)}<strong>${v[0]}</strong><small>${v[1]} · ${v[2]}</small><div class="progress"><div style="width:${(level / 104) * 100}%"></div></div></button>`;
+      return `<button data-aa="${i}">${img(i)}<strong>${v[0]}</strong><small>${v[1]} ·${v[2]}</small><div class="progress"><div style="width:${(level / 104) * 100}%"></div></div></button>`;
     },
   ).join("")}</div>`;
   app.querySelectorAll("[data-aa]").forEach(
@@ -497,7 +497,7 @@ function encode(v) {
   return `AD1.${payload}.${checksum(payload)}`;
 }
 function decode(code) {
-  if (code.length > 2000000) throw Error("Save is too large.");
+  if (code.length > 2000000) throw Error("Save data too large.");
   let parts = code.replace(/\s/g, "").split(".");
   if (
     parts.length !== 3 ||
@@ -505,7 +505,7 @@ function decode(code) {
     checksum(parts[1]) !== parts[2]
   )
     throw Error(
-      "That code is incomplete or damaged. Copy the entire AD1 code.",
+      "Code is invalid or incomplete. Verify the entire string was copied.",
     );
   return validate(
     JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))),
@@ -522,15 +522,15 @@ function download(name, txt) {
 function backup() {
   const code = encode(save);
   $("#modal-body").innerHTML =
-    `<h2>Take your progress with you.</h2><p>Everything is saved in this browser: card familiarity, scores, streaks, retries, and settings. Keep a backup before clearing site data or switching devices. Active rounds and sketches are not included.</p><label for="export-code">Your progress code</label><textarea id="export-code" readonly spellcheck="false"></textarea><div class="actions"><button id="copy" class="primary">Copy code</button><button id="download">Download backup</button>${blocked ? '<button id="raw">Download unreadable browser save</button>' : ""}</div><p class="toast" id="save-status" role="status"></p><hr style="border:0;border-top:1px solid var(--line)"><h3>Restore a backup</h3><p>Paste a progress code, or the JSON from the original Python game’s amino_dash_progress.json. Review it before replacing this browser’s progress.</p><textarea id="import-code" placeholder="AD1.… or original Python JSON" spellcheck="false" aria-label="Progress code to restore"></textarea><button id="review" style="margin-top:12px">Review backup</button><div id="review-area" role="status"></div>`;
+    `<h2>Backup & Restore</h2><p>Progress is saved locally in this browser. Export a backup before clearing site data or switching browsers.</p><label for="export-code">Current export code</label><textarea id="export-code" readonly spellcheck="false"></textarea><div class="actions"><button id="copy" class="primary">Copy code</button><button id="download">Download backup file</button>${blocked ? '<button id="raw">Download unreadable local data</button>' : ""}</div><p class="toast" id="save-status" role="status"></p><hr style="border:0;border-top:1px solid var(--line)"><h3>Import Backup</h3><p>Paste an AD1 export code or valid legacy JSON to restore progress.</p><textarea id="import-code" placeholder="AD1... or JSON" spellcheck="false" aria-label="Progress code to restore"></textarea><button id="review" style="margin-top:12px">Review backup</button><div id="review-area" role="status"></div>`;
   $("#export-code").value = code;
   $("#copy").onclick = async () => {
     try {
       await navigator.clipboard.writeText(code);
-      $("#save-status").textContent = "Copied. Keep it somewhere safe.";
+      $("#save-status").textContent = "Copied to clipboard.";
     } catch {
       $("#export-code").select();
-      $("#save-status").textContent = "Copy manually: press Ctrl+C (or ⌘C).";
+      $("#save-status").textContent = "Select and press Ctrl+C (⌘C) to copy.";
     }
   };
   $("#download").onclick = () => download("amino-dash-progress.txt", code);
@@ -559,7 +559,7 @@ function backup() {
             Array.isArray(legacy) ||
             Object.keys(legacy).length > 260
           )
-            throw Error("Invalid Python save.");
+            throw Error("Invalid JSON format.");
           for (let [k, v] of Object.entries(legacy)) {
             if (
               !validKey(k) ||
@@ -569,14 +569,14 @@ function backup() {
                 (x) => typeof x === "number" && Number.isFinite(x) && x >= 0,
               )
             )
-              throw Error("Invalid Python card data.");
+              throw Error("Invalid card data.");
             candidate.memory[k] = [Math.min(8, v[0]), v[1]];
           }
           candidate = validate(candidate);
         }
       } else candidate = decode(raw);
       $("#review-area").innerHTML =
-        `<div class="panel" style="margin-top:14px"><h3>Ready to restore</h3><p>${candidate.totalXP} XP · ${candidate.rounds} completed rounds · ${Object.keys(candidate.memory).length} learned card directions</p><p>This replaces your current progress and ends the active round. Download your current backup first if you want to keep it.</p><button id="confirm-restore" class="primary">Replace progress with this backup</button></div>`;
+        `<div class="panel" style="margin-top:14px"><h3>Backup Summary</h3><p>${candidate.totalXP} XP · ${candidate.rounds} completed rounds · ${Object.keys(candidate.memory).length} cards recorded</p><p>Restoring will replace existing data in this browser session.</p><button id="confirm-restore" class="primary">Confirm & restore</button></div>`;
       $("#confirm-restore").onclick = () => {
         save = candidate;
         blocked = false;
@@ -585,10 +585,10 @@ function backup() {
         home();
         if (!stored)
           $("#storage-warning").textContent =
-            "Backup restored for this session, but browser storage is unavailable. Export again before closing.";
+            "Backup active for this session, but local storage could not be updated.";
       };
     } catch (e) {
-      $("#review-area").textContent = "Could not restore: " + e.message;
+      $("#review-area").textContent = "Could not parse backup: " + e.message;
     }
   };
   modal.showModal();
@@ -632,7 +632,8 @@ window.addEventListener("storage", (e) => {
   if (e.key === SAVE_KEY) {
     blocked = true;
     $("#storage-warning").textContent =
-      "Progress changed in another tab. This tab has paused saving to avoid overwriting it. Export this session if needed, then reload to use the other tab’s progress.";
+      "Progress updated in another tab. Reload this page to load the newest save.";
   }
 });
 home();
+```[cite: 1]
