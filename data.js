@@ -99,56 +99,103 @@ function molecule(i) {
   return {atoms,bonds,sites,alpha,n,car,ox,oh};
 }
 
-// Graph matching is coordinate-independent and accepts equivalent Kekule forms.
-function graphMatch(own, target) {
-  const normalize = e => e.replace(/−/g,'-').replace(/⁺/g,'+').replace(/\s/g,'');
+// Small rings are shared by rendering and aromatic graph matching.
+function molecularRings(g) {
+  const adj=g.atoms.map(()=>[]), rings=new Map();
+  g.bonds.forEach(b=>{adj[b.a]?.push(b.b);adj[b.b]?.push(b.a);});
+  for(let start=0;start<adj.length;start++) {
+    const walk=path=>{
+      const last=path.at(-1);
+      if(path.length>=5&&adj[last].includes(start)) {
+        const edges=path.map((a,j)=>[a,path[(j+1)%path.length]].sort((a,b)=>a-b).join(':'));
+        rings.set(edges.slice().sort().join('|'),{atoms:path,edges});
+      }
+      if(path.length===6)return;
+      for(const next of adj[last])if(next>start&&!path.includes(next))walk([...path,next]);
+    };
+    walk([start]);
+  }
+  return [...rings.values()];
+}
+function atomLabel(e) {
+  return [...e].map(c=>/[0-9]/.test(c)?`<tspan baseline-shift="sub" font-size="70%">${c}</tspan>`:/[+−-]/.test(c)?`<tspan baseline-shift="super" font-size="70%">${c}</tspan>`:c).join('');
+}
+// One renderer for the sketcher, fallback references and protonation structures.
+function moleculeMarkup(g) {
+  const rings=molecularRings(g), color='#17241f';let out='';
+  const line=(x,y,X,Y,w=3)=>`<line x1="${x}" y1="${y}" x2="${X}" y2="${Y}" stroke="${color}" stroke-width="${w}" stroke-linecap="round"/>`;
+  for(const b of g.bonds) {
+    const a=g.atoms[b.a],c=g.atoms[b.b],length=Math.hypot(c.x-a.x,c.y-a.y)||1;
+    const ux=(c.x-a.x)/length,uy=(c.y-a.y)/length,nx=-uy,ny=ux;
+    const pad=e=>e==='C'?0:Math.min(length*.3,15+Math.abs(ux)*Math.max(0,e.length-1)*6);
+    const pa=pad(a.e),pc=pad(c.e),x=a.x+ux*pa,y=a.y+uy*pa,X=c.x-ux*pc,Y=c.y-uy*pc;
+    if(b.t==='wedge')out+=`<polygon points="${x},${y} ${X+nx*8},${Y+ny*8} ${X-nx*8},${Y-ny*8}" fill="${color}"/>`;
+    else if(b.t==='dash')for(let t=.12;t<1;t+=.12)out+=line(x+(X-x)*t-nx*8*t,y+(Y-y)*t-ny*8*t,x+(X-x)*t+nx*8*t,y+(Y-y)*t+ny*8*t,2.5);
+    else if(b.t==='double') {
+      const ring=rings.find(r=>r.edges.includes([b.a,b.b].sort((a,b)=>a-b).join(':')));
+      if(ring) {
+        const cx=ring.atoms.reduce((s,i)=>s+g.atoms[i].x,0)/ring.atoms.length,cy=ring.atoms.reduce((s,i)=>s+g.atoms[i].y,0)/ring.atoms.length;
+        const side=(cx-(a.x+c.x)/2)*nx+(cy-(a.y+c.y)/2)*ny>=0?1:-1,offset=side*9,trim=Math.min(14,length*.2);
+        out+=line(x,y,X,Y)+line(x+ux*trim+nx*offset,y+uy*trim+ny*offset,X-ux*trim+nx*offset,Y-uy*trim+ny*offset,2.6);
+      }else for(const o of [-4.5,4.5])out+=line(x+nx*o,y+ny*o,X+nx*o,Y+ny*o);
+    }else for(const o of b.t==='triple'?[-8,0,8]:[0])out+=line(x+nx*o,y+ny*o,X+nx*o,Y+ny*o);
+  }
+  g.atoms.forEach((a,i)=>{
+    const neighbors=g.bonds.filter(b=>b.a===i||b.b===i).map(b=>g.atoms[b.a===i?b.b:b.a]);
+    const label=neighbors.length===1&&neighbors[0].x>a.x+15?a.e.replace(/^([NOS])H(\d*)([+−-]?)$/,'H$2$1$3'):a.e;
+    if(a.e!=='C'||!neighbors.length)out+=`<text x="${a.x}" y="${a.y+8}" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" fill="${color}" paint-order="stroke" stroke="white" stroke-width="5" stroke-linejoin="round">${atomLabel(label)}</text>`;
+  });
+  return out;
+}
+function graphSVG(g) {
+  const xs=g.atoms.map(a=>a.x),ys=g.atoms.map(a=>a.y),x=Math.min(...xs)-48,y=Math.min(...ys)-48;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${Math.max(...xs)-x+48} ${Math.max(...ys)-y+48}" role="img" aria-label="Molecular skeleton">${moleculeMarkup(g)}</svg>`;
+}
+// Coordinate-independent matching; valid fused Kekule forms and imidazole tautomers agree.
+function graphMatch(own,target) {
+  const normalize=e=>e.replace(/[₀-₉]/g,c=>String('₀₁₂₃₄₅₆₇₈₉'.indexOf(c))).replace(/−/g,'-').replace(/⁺/g,'+').replace(/⁻/g,'-').replace(/\s/g,'').toUpperCase();
   function prepare(g) {
-    const atoms=g.atoms.map(a=>normalize(a.e));
-    const adj=atoms.map(()=>new Map());
+    const atoms=g.atoms.map(a=>normalize(a.e)),adj=atoms.map(()=>new Map());
     for(const b of g.bonds) {
-      if(!adj[b.a]||!adj[b.b]||b.a===b.b||adj[b.a].has(b.b)) return null;
-      adj[b.a].set(b.b,b.t==='double'?2:b.t==='triple'?3:1);
-      adj[b.b].set(b.a,b.t==='double'?2:b.t==='triple'?3:1);
+      if(!adj[b.a]||!adj[b.b]||b.a===b.b||adj[b.a].has(b.b))return null;
+      const order=b.t==='double'?2:b.t==='triple'?3:1;
+      adj[b.a].set(b.b,order);adj[b.b].set(b.a,order);
     }
-    // Alternating 5/6-member aromatic cycles: normalize resonance placement.
-    const aromatic=new Set();
-    for(let start=0;start<atoms.length;start++) {
-      const walk=(path)=> {
-        const last=path.at(-1);
-        if(path.length>=5&&adj[last].has(start)) {
-          const orders=path.map((a,j)=>adj[a].get(path[(j+1)%path.length]));
-          const doubles=orders.filter(x=>x===2).length;
-          const alternating=orders.every((o,j)=>[1,2].includes(o)&&!(o===2&&orders[(j+1)%orders.length]===2));
-          const neutralNH=path.every((a,j)=>atoms[a]!=='NH'||(orders[j]===1&&orders[(j+orders.length-1)%orders.length]===1));
-          if(alternating&&neutralNH&&((path.length===6&&doubles===3&&path.every(a=>atoms[a]==='C')) ||
-             (path.length===5&&doubles===2&&path.some(a=>atoms[a]==='NH')&&path.every(a=>['C','N','NH'].includes(atoms[a])))))
-            path.forEach((a,j)=>aromatic.add([a,path[(j+1)%path.length]].sort((a,b)=>a-b).join(':')));
-        }
-        if(path.length===6) return;
-        for(const [next] of adj[last]) if(next>start&&!path.includes(next)) walk([...path,next]);
-      };
-      walk([start]);
+    // Merge rings sharing an edge, then validate conjugation across the entire system.
+    const systems=[];
+    for(const ring of molecularRings(g)) {
+      if(!ring.atoms.every(i=>['C','N','NH'].includes(atoms[i])))continue;
+      let edges=new Set(ring.edges),ids=new Set(ring.atoms);
+      for(let i=systems.length-1;i>=0;i--)if([...edges].some(e=>systems[i].edges.has(e))) {
+        systems[i].edges.forEach(e=>edges.add(e));systems[i].ids.forEach(a=>ids.add(a));systems.splice(i,1);
+      }
+      systems.push({edges,ids});
     }
-    aromatic.forEach(k=> { const [a,b]=k.split(':').map(Number); adj[a].set(b,4);adj[b].set(a,4); });
+    for(const {edges,ids} of systems) {
+      const orders=i=>[...adj[i]].filter(([j])=>ids.has(j)).map(([,o])=>o);
+      const valid=[...ids].every(i=>orders(i).every(o=>o===1||o===2)&&orders(i).filter(o=>o===2).length===(atoms[i]==='NH'?0:1)&&[...adj[i]].every(([j,o])=>ids.has(j)||o===1));
+      const electrons=[...ids].reduce((s,i)=>s+(atoms[i]==='NH'?2:1),0);
+      if(!valid||electrons%4!==2)continue;
+      edges.forEach(k=>{const [a,b]=k.split(':').map(Number);adj[a].set(b,4);adj[b].set(a,4);});
+      // Histidine's two neutral ring-N proton placements have the same identity.
+      if(ids.size===5&&[...ids].filter(i=>atoms[i]==='N').length===1&&[...ids].filter(i=>atoms[i]==='NH').length===1)
+        ids.forEach(i=>{if(atoms[i]==='N'||atoms[i]==='NH')atoms[i]='N_ar';});
+    }
     return {atoms,adj};
   }
-  if(own.atoms.length!==target.atoms.length||own.bonds.length!==target.bonds.length) return false;
-  if(own.atoms.length>40) return false;
-  const a=prepare(own),b=prepare(target); if(!a||!b)return false;
+  if(own.atoms.length!==target.atoms.length||own.bonds.length!==target.bonds.length||own.atoms.length>40)return false;
+  const a=prepare(own),b=prepare(target);if(!a||!b)return false;
   const signature=(g,i)=>g.atoms[i]+'|'+[...g.adj[i].values()].sort().join(',');
   const candidates=a.atoms.map((_,i)=>b.atoms.flatMap((_,j)=>signature(a,i)===signature(b,j)?[j]:[]));
   if(candidates.some(c=>!c.length))return false;
   const order=a.atoms.map((_,i)=>i).sort((i,j)=>candidates[i].length-candidates[j].length);
   const map=new Map(),used=new Set();let work=0;
   function search(depth) {
-    if(++work>50000)return false;
-    if(depth===order.length)return true;
+    if(++work>50000)return false;if(depth===order.length)return true;
     const i=order[depth];
     for(const j of candidates[i]) {
       if(used.has(j)||[...map].some(([x,y])=>a.adj[i].get(x)!==b.adj[j].get(y)))continue;
-      map.set(i,j);used.add(j);
-      if(search(depth+1))return true;
-      map.delete(i);used.delete(j);
+      map.set(i,j);used.add(j);if(search(depth+1))return true;map.delete(i);used.delete(j);
     }
     return false;
   }
@@ -162,7 +209,7 @@ function peptide(sequence) {
     m.atoms.forEach((a,j)=> {
       if(index<sequence.length-1&&j===m.oh)return;
       map.set(j,g.atoms.length);
-      g.atoms.push({...a,x:a.x+index*330,e:j===m.n&&index>0?(aa===6?'N':'NH'):a.e});
+      g.atoms.push({...a,x:a.x+index*260,e:j===m.n&&index>0?(aa===6?'N':'NH'):a.e});
     });
     m.bonds.forEach(b=> { if(map.has(b.a)&&map.has(b.b))g.bonds.push({...b,a:map.get(b.a),b:map.get(b.b)}); });
     m.sites.filter(s=>s.kind==='R'||s.kind==='N'&&index===0||s.kind==='C'&&index===sequence.length-1)

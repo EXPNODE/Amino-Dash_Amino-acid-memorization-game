@@ -351,15 +351,14 @@ dialog::backdrop {
   width: 100%;
   display: block;
   touch-action: none;
-  background: radial-gradient(#dce4da 1px, transparent 1px);
-  background-size: 20px 20px;
+  background: #fff;
 }
 .drawing text {
-  font: 19px system-ui;
-  fill: #192e26;
+  font: 25px Arial, sans-serif;
+  fill: #17241f;
   paint-order: stroke;
   stroke: white;
-  stroke-width: 6px;
+  stroke-width: 5px;
   stroke-linejoin: round;
 }
 .editor-help {
@@ -527,7 +526,7 @@ summary { cursor:pointer; } details[open]>summary { margin-bottom:15px; } .credi
 .pka-panel { position:sticky;top:16px;padding:14px; }.pka-panel>small { display:block;font-size:11px;margin-top:12px; }
 .pka-table { font-size:11px;line-height:1.4;width:100%;border-collapse:collapse; }.pka-table th,.pka-table td { padding:5px 3px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap; }.pka-table th:first-child { text-align:left; }.pka-table tbody th { font-weight:500; }.pka-table .group th { color:var(--green);font-weight:750;padding-top:12px; }
 .table-scroll { overflow-x:auto; }.ph { font-size:24px;font-weight:700;color:var(--green); }
-.proton-canvas { background:#fff;border-radius:14px;overflow-x:auto;padding:10px; }.proton-canvas svg { display:block;width:100%;min-width:450px;max-height:540px; }
+.proton-canvas { background:#fff;border-radius:14px;overflow-x:auto;padding:10px; }.proton-canvas svg { display:block;width:100%;min-width:300px;max-height:540px; }
 .proton-site { cursor:pointer;outline:none; }.proton-site circle { fill:transparent;stroke:#7f8d85;stroke-width:2;stroke-dasharray:4 3; }.proton-site.selected circle { fill:#bade8833;stroke:#427622;stroke-dasharray:none;stroke-width:3; }.proton-site:focus circle { stroke:#2877d8;stroke-width:4; }.proton-site text { font:15px system-ui;fill:#376815; }.proton-site.site-correct circle { stroke:#43812d;stroke-dasharray:none; }.proton-site.site-wrong circle { stroke:#bd442f;stroke-dasharray:none;stroke-width:3; }
 .equation { border-left:3px solid var(--green);padding:12px;text-align:left;background:var(--panel);overflow-wrap:anywhere; }.hh-prompt { font-size:20px;color:var(--ink); } #hh-form { margin-top:24px; }
 .calculator { border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:24px; }.calculator input { font-size:17px;text-align:left; }.calc-keys { display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:10px; }.calc-keys button { padding:8px; }.calculator .actions { margin-top:10px; }.calculator output { display:block;font-size:24px;color:var(--green);min-height:44px;padding:10px 0;overflow-wrap:anywhere; }.calculator>small { display:block; }
@@ -539,9 +538,12 @@ summary { cursor:pointer; } details[open]>summary { margin-bottom:15px; } .credi
 .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
 [hidden] { display:none!important; }
 @media(max-width:950px) { .combined-row { grid-template-columns:repeat(3,1fr); }.combined-part:first-child { grid-column:1/-1; }.combined-row .drawing { max-height:400px; }.chem-layout { grid-template-columns:minmax(0,1fr) 300px;gap:14px; } }
-@media(max-width:700px) { .chem-layout { grid-template-columns:1fr; }.pka-panel { position:static; }.pka-table { font-size:12px; }.combined-row { grid-template-columns:1fr 1fr; }.combined-part:last-child { grid-column:1/-1; }.combined-row .editor-help { font-size:12px; } nav { gap:5px; }.theme-label { margin-left:auto; }.hero { gap:16px; }.modes { grid-template-columns:1fr 1fr; }.mode { min-height:160px; }.proton-canvas svg { min-width:480px; } }
+@media(max-width:700px) { .chem-layout { grid-template-columns:1fr; }.pka-panel { position:static; }.pka-table { font-size:12px; }.combined-row { grid-template-columns:1fr 1fr; }.combined-part:last-child { grid-column:1/-1; }.combined-row .editor-help { font-size:12px; } nav { gap:5px; }.theme-label { margin-left:auto; }.hero { gap:16px; }.modes { grid-template-columns:1fr 1fr; }.mode { min-height:160px; }.proton-canvas svg { min-width:280px; } }
 @media(prefers-reduced-motion:reduce) { .gold-stars span { opacity:1;transform:none; }.confetti { display:none; } }
 
 .save-help { margin-top:24px; } .file-button input { padding:0; }
 
 #storage-warning { color:#ffe0a1; }
+
+.score-detail { font-size:13px; }
+#proton-names { color:var(--ink); }

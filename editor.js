@@ -73,7 +73,7 @@ class MoleculeEditor {
       )
       .join(
         "",
-      )}<select aria-label="Atom label">${["C", "N", "NH", "NH2", "NH3+", "NH2+", "NH+", "O", "OH", "S", "SH", "H", "N+", "O−"].map((e) => `<option>${e}</option>`).join("")}</select><button type="button" data-action="undo">Undo</button><button type="button" data-action="redo">Redo</button><button type="button" data-action="reset">Backbone</button></div><svg class="drawing" viewBox="0 0 700 580" role="img" aria-label="Molecule drawing canvas. Use pointer to draw; paper mode is available below."></svg></div><p class="editor-help">Drag from an atom to draw a bond; release on another atom to connect. Click a bond to change its type (click a wedge/dash again to reverse it). Atom tool: choose a label, then click an atom. Ring tool: click an atom to attach a ring, or empty space for a new ring. Move atoms to arrange your drawing. Carbon and its H are implicit.</p>`;
+      )}<select aria-label="Atom label">${["C", "N", "NH", "NH2", "NH3+", "NH2+", "NH+", "O", "OH", "S", "SH", "H", "N+", "O−"].map((e) => `<option>${e}</option>`).join("")}</select><button type="button" data-action="undo">Undo</button><button type="button" data-action="redo">Redo</button><button type="button" data-action="reset">Backbone</button></div><svg class="drawing" viewBox="0 0 700 580" role="img" aria-label="Molecule drawing canvas. Use pointer to draw; paper mode is available below."></svg></div><p class="editor-help">Drag from an atom to draw a bond; release on another atom to connect. Click a bond to change its type (click a wedge/dash again to reverse it). Atom tool: choose a label, then click an atom. Ring tool: click an atom to attach a ring, a bond to fuse a ring, or empty space for a new ring. Move atoms to arrange your drawing. Carbon and its H are implicit.</p>`;
     this.svg = this.host.querySelector("svg");
     this.host.querySelectorAll("[data-tool]").forEach(
       (b) =>
@@ -189,7 +189,7 @@ class MoleculeEditor {
     }
     if (["ring5", "ring6", "benzene"].includes(this.tool)) {
       this.snapshot();
-      this.ring(i, p);
+      this.ring(i, p, i < 0 ? j : -1);
       this.draw();
       return;
     }
@@ -246,17 +246,12 @@ class MoleculeEditor {
           ) *
             Math.PI) /
           6;
-      let len = Math.min(
-        100,
-        Math.max(48, Math.hypot(p.x - origin.x, p.y - origin.y)),
-      );
-      b = this.atoms.length;
-      this.atoms.push({
-        x: Math.max(15, Math.min(685, origin.x + len * Math.cos(angle))),
-        y: Math.max(15, Math.min(565, origin.y + len * Math.sin(angle))),
-        e: "C",
-      });
+      // Stable bond lengths, with a second hit test after angular snapping.
+      const endpoint={x:Math.max(15,Math.min(685,origin.x+72*Math.cos(angle))),y:Math.max(15,Math.min(565,origin.y+72*Math.sin(angle)))};
+      b=this.near(endpoint);
+      if(b<0){b=this.atoms.length;this.atoms.push({...endpoint,e:"C"});}
     }
+    if(b===a){this.draw();return;}
     let old = this.bonds.find(
       (bond) =>
         (bond.a === a && bond.b === b) || (bond.a === b && bond.b === a),
@@ -266,72 +261,29 @@ class MoleculeEditor {
     this.selected = b;
     this.draw();
   }
-  ring(i, p) {
-    const n = this.tool === "ring5" ? 5 : 6,
-      r = 52;
-    let start = i >= 0 ? this.atoms[i] : p;
-    let ids = [];
-    let cx = start.x,
-      cy = start.y - r;
-    for (let k = 0; k < n; k++) {
-      if (k === 0 && i >= 0) {
-        ids.push(i);
-        continue;
-      }
-      ids.push(this.atoms.length);
-      this.atoms.push({
-        x: cx + r * Math.cos(Math.PI / 2 + (k * 2 * Math.PI) / n),
-        y: cy + r * Math.sin(Math.PI / 2 + (k * 2 * Math.PI) / n),
-        e: "C",
+  ring(i,p,bondIndex=-1) {
+    const n=this.tool==="ring5"?5:6;
+    let ids=[],points=[];
+    if(bondIndex>=0) {
+      const shared=this.bonds[bondIndex],a=this.atoms[shared.a],b=this.atoms[shared.b];
+      const length=Math.hypot(b.x-a.x,b.y-a.y),angle=Math.atan2(b.y-a.y,b.x-a.x);
+      const sides=[-1,1].map(side=>{
+        const ring=[a,b];let direction=angle;
+        for(let k=2;k<n;k++){direction+=side*2*Math.PI/n;const last=ring.at(-1);ring.push({x:last.x+length*Math.cos(direction),y:last.y+length*Math.sin(direction)});}
+        const clearance=ring.slice(2).reduce((sum,p)=>sum+Math.min(150,...this.atoms.filter((_,j)=>j!==shared.a&&j!==shared.b).map(c=>Math.hypot(c.x-p.x,c.y-p.y))),0);
+        return {ring,clearance};
       });
+      points=sides.sort((a,b)=>b.clearance-a.clearance)[0].ring;
+      ids=[shared.a,shared.b];
+    }else {
+      const r=72/(2*Math.sin(Math.PI/n)),start=i>=0?this.atoms[i]:p;
+      for(let k=0;k<n;k++)points.push({x:start.x+r*Math.cos(Math.PI/2+k*2*Math.PI/n),y:start.y-r+r*Math.sin(Math.PI/2+k*2*Math.PI/n)});
+      if(i>=0)ids=[i];
     }
-    for (let k = 0; k < n; k++)
-      this.bonds.push({
-        a: ids[k],
-        b: ids[(k + 1) % n],
-        t: this.tool === "benzene" && k % 2 === 0 ? "double" : "single",
-      });
+    for(let k=ids.length;k<n;k++){ids.push(this.atoms.length);this.atoms.push({...points[k],e:"C"});}
+    for(let k=bondIndex>=0?1:0;k<n;k++)this.bonds.push({a:ids[k],b:ids[(k+1)%n],t:this.tool==="benzene"&&k%2===(bondIndex>=0&&this.bonds[bondIndex].t!=="double"?1:0)?"double":"single"});
   }
-  markup() {
-    let out = "";
-    const line = (x, y, X, Y, w = 2) =>
-      `<line x1="${x}" y1="${y}" x2="${X}" y2="${Y}" stroke="#192e26" stroke-width="${w}" stroke-linecap="round"/>`;
-    this.bonds.forEach((b) => {
-      const a = this.atoms[b.a],
-        c = this.atoms[b.b],
-        len = Math.hypot(c.x - a.x, c.y - a.y) || 1,
-        nx = -(c.y - a.y) / len,
-        ny = (c.x - a.x) / len;
-      if (b.t === "wedge")
-        out += `<polygon points="${a.x},${a.y} ${c.x + nx * 7},${c.y + ny * 7} ${c.x - nx * 7},${c.y - ny * 7}" fill="#192e26"/>`;
-      else if (b.t === "dash") {
-        for (let t = 0.12; t < 1; t += 0.12)
-          out += line(
-            a.x + (c.x - a.x) * t - nx * 7 * t,
-            a.y + (c.y - a.y) * t - ny * 7 * t,
-            a.x + (c.x - a.x) * t + nx * 7 * t,
-            a.y + (c.y - a.y) * t + ny * 7 * t,
-          );
-      } else {
-        const offsets =
-          b.t === "double" ? [-3, 3] : b.t === "triple" ? [-5, 0, 5] : [0];
-        offsets.forEach(
-          (o) =>
-            (out += line(
-              a.x + nx * o,
-              a.y + ny * o,
-              c.x + nx * o,
-              c.y + ny * o,
-            )),
-        );
-      }
-    });
-    this.atoms.forEach((a, i) => {
-      if (a.e !== "C" || !this.bonds.some((b) => b.a === i || b.b === i))
-        out += `<text x="${a.x}" y="${a.y + 6}" text-anchor="middle">${a.e}</text>`;
-    });
-    return out;
-  }
+  markup() { return moleculeMarkup(this); }
   draw() {
     this.svg.innerHTML =
       this.markup() +
